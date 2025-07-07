@@ -1,4 +1,4 @@
-module github.com/haochend413/bubbles
+module github.com/charmbracelet/bubbles
 
 go 1.23.0
 
@@ -37,3 +37,4 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.3.8 // indirect
 )
+
