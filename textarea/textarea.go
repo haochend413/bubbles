@@ -964,10 +964,10 @@ func (m *Model) SetHeight(h int) {
 }
 
 // Update is the Bubble Tea update loop.
-func (m *Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	if !m.focus {
 		m.Cursor.Blur()
-		return *m, nil
+		return m, nil
 	}
 
 	// Used to determine if the cursor should blink.
@@ -1037,7 +1037,7 @@ func (m *Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.deleteWordRight()
 			case key.Matches(msg, m.KeyMap.InsertNewline):
 				if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
-					return *m, nil
+					return m, nil
 				}
 				m.col = clamp(m.col, 0, len(m.value[m.row]))
 				m.splitLine(m.row, m.col)
@@ -1052,7 +1052,7 @@ func (m *Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			case key.Matches(msg, m.KeyMap.WordForward):
 				m.wordRight()
 			case key.Matches(msg, m.KeyMap.Paste):
-				return *m, Paste
+				return m, Paste
 			case key.Matches(msg, m.KeyMap.CharacterBackward):
 				m.characterLeft(false /* insideLine */)
 			case key.Matches(msg, m.KeyMap.LinePrevious):
@@ -1123,7 +1123,7 @@ func (m *Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	m.repositionView()
 
-	return *m, tea.Batch(cmds...)
+	return m, tea.Batch(cmds...)
 }
 
 // View renders the text area in its current state.
