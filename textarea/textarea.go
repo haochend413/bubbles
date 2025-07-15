@@ -191,9 +191,6 @@ type Model struct {
 	// General settings.
 	cache *memoization.MemoCache[line, [][]rune]
 
-	// Editable determines if the textarea can be edited by the user.
-	Editable bool
-
 	// Prompt is printed at the beginning of each line.
 	//
 	// When changing the value of Prompt after the model has been
@@ -303,7 +300,6 @@ func New() Model {
 		ShowLineNumbers:      true,
 		Cursor:               cur,
 		KeyMap:               DefaultKeyMap,
-		Editable:             true,
 
 		value: make([][]rune, minHeight, maxLines),
 		focus: false,
@@ -317,11 +313,6 @@ func New() Model {
 	m.SetWidth(defaultWidth)
 
 	return m
-}
-
-// SetEditable sets whether the textarea is editable.
-func (m *Model) SetEditable(editable bool) {
-	m.Editable = editable
 }
 
 // DefaultStyles returns the default styles for focused and blurred states for
@@ -985,8 +976,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Only allow editing if Editable is true
-		// if m.Editable {
 		switch {
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
@@ -1071,39 +1060,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.capitalizeRight()
 		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
 			m.transposeLeft()
+
 		default:
 			m.insertRunesFromUserInput(msg.Runes)
 		}
-		// } else {
-		// Not editable: allow only navigation keys
-		switch {
-		case key.Matches(msg, m.KeyMap.LineEnd):
-			m.CursorEnd()
-		case key.Matches(msg, m.KeyMap.LineStart):
-			m.CursorStart()
-		case key.Matches(msg, m.KeyMap.CharacterForward):
-			m.characterRight()
-		case key.Matches(msg, m.KeyMap.LineNext):
-			m.CursorDown()
-		case key.Matches(msg, m.KeyMap.WordForward):
-			m.wordRight()
-		case key.Matches(msg, m.KeyMap.CharacterBackward):
-			m.characterLeft(false /* insideLine */)
-		case key.Matches(msg, m.KeyMap.LinePrevious):
-			m.CursorUp()
-		case key.Matches(msg, m.KeyMap.WordBackward):
-			m.wordLeft()
-		case key.Matches(msg, m.KeyMap.InputBegin):
-			m.moveToBegin()
-		case key.Matches(msg, m.KeyMap.InputEnd):
-			m.moveToEnd()
-		}
-		// }
 
 	case pasteMsg:
-		// if m.Editable {
 		m.insertRunesFromUserInput([]rune(msg))
-		// }
 
 	case pasteErrMsg:
 		m.Err = msg
