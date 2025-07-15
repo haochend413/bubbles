@@ -964,7 +964,7 @@ func (m *Model) SetHeight(h int) {
 }
 
 // Update is the Bubble Tea update loop.
-func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
 		m.Cursor.Blur()
 		return m, nil
