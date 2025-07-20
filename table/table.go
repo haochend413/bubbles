@@ -27,6 +27,7 @@ type Model struct {
 	viewport viewport.Model
 	start    int
 	end      int
+	// Test     int
 }
 
 // Row represents one line in the table.
@@ -51,8 +52,9 @@ type KeyMap struct {
 	GotoBottom   key.Binding
 }
 
-// define messages when triggered;
-type MoveSelectMsg = struct{ Row *Row }
+// MoveSelectMsg is sent when a row is selected in the table.
+// It contains a pointer to the selected row.
+type MoveSelectMsg struct{ Row *Row }
 
 // ShortHelp implements the KeyMap interface.
 func (km KeyMap) ShortHelp() []key.Binding {
@@ -213,9 +215,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.LineUp):
-			m.MoveUp(1)
+			return m, m.MoveUp(1)
 		case key.Matches(msg, m.KeyMap.LineDown):
-			m.MoveDown(1)
+			return m, m.MoveDown(1)
 		case key.Matches(msg, m.KeyMap.PageUp):
 			m.MoveUp(m.viewport.Height)
 		case key.Matches(msg, m.KeyMap.PageDown):
@@ -370,6 +372,7 @@ func (m *Model) MoveUp(n int) tea.Cmd {
 		m.viewport.YOffset = clamp(m.viewport.YOffset+n, 1, m.viewport.Height)
 	}
 	m.UpdateViewport()
+	// print("changed")
 	//return the msg row;
 	return func() tea.Msg {
 		if m.cursor >= 0 && m.cursor < len(m.rows) {
