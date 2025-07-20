@@ -51,6 +51,9 @@ type KeyMap struct {
 	GotoBottom   key.Binding
 }
 
+// define messages when triggered;
+type MoveSelectMsg = struct{ Row *Row }
+
 // ShortHelp implements the KeyMap interface.
 func (km KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{km.LineUp, km.LineDown}
@@ -356,7 +359,7 @@ func (m *Model) SetCursor(n int) {
 
 // MoveUp moves the selection up by any number of rows.
 // It can not go above the first row.
-func (m *Model) MoveUp(n int) {
+func (m *Model) MoveUp(n int) tea.Cmd {
 	m.cursor = clamp(m.cursor-n, 0, len(m.rows)-1)
 	switch {
 	case m.start == 0:
@@ -367,11 +370,18 @@ func (m *Model) MoveUp(n int) {
 		m.viewport.YOffset = clamp(m.viewport.YOffset+n, 1, m.viewport.Height)
 	}
 	m.UpdateViewport()
+	//return the msg row;
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // MoveDown moves the selection down by any number of rows.
 // It can not go below the last row.
-func (m *Model) MoveDown(n int) {
+func (m *Model) MoveDown(n int) tea.Cmd {
 	m.cursor = clamp(m.cursor+n, 0, len(m.rows)-1)
 	m.UpdateViewport()
 
@@ -383,6 +393,12 @@ func (m *Model) MoveDown(n int) {
 	case m.viewport.YOffset > 1:
 	case m.cursor > m.viewport.YOffset+m.viewport.Height-1:
 		m.viewport.SetYOffset(clamp(m.viewport.YOffset+1, 0, 1))
+	}
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
 	}
 }
 
