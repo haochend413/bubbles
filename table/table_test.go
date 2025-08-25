@@ -4,11 +4,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/haochend413/bubbles/help"
+	"github.com/haochend413/bubbles/viewport"
 )
 
 var testCols = []Column{
