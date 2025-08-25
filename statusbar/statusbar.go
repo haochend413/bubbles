@@ -23,17 +23,20 @@ type Elem struct {
 	FgColor string
 }
 
-func (e *Elem) SetValue(content string) {
+func (e *Elem) SetValue(content string) *Elem {
 	e.Content = content
+	return e
 }
 
-func (e *Elem) SetColors(fg, bg string) {
+func (e *Elem) SetColors(fg, bg string) *Elem {
 	e.FgColor = fg
 	e.BgColor = bg
+	return e
 }
 
-func (e *Elem) SetWidth(width int) {
+func (e *Elem) SetWidth(width int) *Elem {
 	e.Width = width
+	return e
 }
 
 //	func (e *Elem) SetPartition(p Partition) {
@@ -144,16 +147,18 @@ func (m *Model) AddLeft(w int, c string) *Elem {
 }
 
 // Remove by id from left partition.
-func (m *Model) RemoveLeft(i int) {
+func (m *Model) RemoveLeft(i int) *Model {
 	if i >= 0 && i < len(m.LeftElems) {
 		m.LeftElems = append(m.LeftElems[:i], m.LeftElems[i+1:]...)
 	}
+	return m
 }
 
-func (m *Model) RemoveRight(i int) {
+func (m *Model) RemoveRight(i int) *Model {
 	if i >= 0 && i < len(m.RightElems) {
 		m.RightElems = append(m.RightElems[:i], m.RightElems[i+1:]...)
 	}
+	return m
 }
 
 func (m *Model) AddRight(w int, c string) *Elem {
@@ -182,12 +187,14 @@ func (m *Model) GetRight(index int) *Elem {
 	return nil
 }
 
-func (m *Model) SetWidth(w int) {
+func (m *Model) SetWidth(w int) *Model {
 	m.Width = w
+	return m
 }
 
-func (m *Model) SetHeight(h int) {
+func (m *Model) SetHeight(h int) *Model {
 	m.Height = h
+	return m
 }
 
 // Render returns the statusbar as a string
