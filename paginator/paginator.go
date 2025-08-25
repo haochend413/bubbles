@@ -7,8 +7,8 @@ package paginator
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/haochend413/bubbles/key"
 )
 
 // Type specifies the way we render pagination.

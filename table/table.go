@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/haochend413/bubbles/help"
+	"github.com/haochend413/bubbles/key"
+	"github.com/haochend413/bubbles/viewport"
 )
 
 // Model defines a state for the table widget.

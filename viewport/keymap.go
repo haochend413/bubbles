@@ -2,7 +2,7 @@
 // Tea.
 package viewport
 
-import "github.com/charmbracelet/bubbles/key"
+import "github.com/haochend413/bubbles/key"
 
 const spacebar = " "
 
