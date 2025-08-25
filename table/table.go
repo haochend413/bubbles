@@ -406,13 +406,25 @@ func (m *Model) MoveDown(n int) tea.Cmd {
 }
 
 // GotoTop moves the selection to the first row.
-func (m *Model) GotoTop() {
+func (m *Model) GotoTop() tea.Cmd {
 	m.MoveUp(m.cursor)
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // GotoBottom moves the selection to the last row.
-func (m *Model) GotoBottom() {
+func (m *Model) GotoBottom() tea.Cmd {
 	m.MoveDown(len(m.rows))
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // FromValues create the table rows from a simple string. It uses `\n` by
