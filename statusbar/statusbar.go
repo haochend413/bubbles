@@ -17,6 +17,7 @@ const (
 )
 
 type Elem struct {
+	tag     string //come with create, no edit;
 	Content string
 	Width   int
 	BgColor string
@@ -56,8 +57,10 @@ func (e Elem) Render(h int) string {
 type Model struct {
 	LeftElems  []*Elem
 	RightElems []*Elem
-	Height     int
-	Width      int
+	ElemsMap   map[string]*Elem //we use maps to keep a quick and convienent access to the elems;
+
+	Height int
+	Width  int
 }
 
 // New creates a new statusbar model
@@ -65,6 +68,7 @@ func New(ops ...BarOptions) Model {
 	m := Model{
 		LeftElems:  []*Elem{},
 		RightElems: []*Elem{},
+		ElemsMap:   make(map[string]*Elem),
 		Height:     1,
 		Width:      100,
 	}
@@ -95,6 +99,7 @@ func WithLeftLen(n int) BarOptions {
 		// Initialize each element with default values
 		for i := range n {
 			m.LeftElems[i] = &Elem{
+				tag:     "",
 				Content: "",
 				Width:   10, // Default width
 				BgColor: "236",
@@ -109,6 +114,7 @@ func WithRightLen(n int) BarOptions {
 		m.RightElems = make([]*Elem, n)
 		for i := range n {
 			m.RightElems[i] = &Elem{
+				tag:     "",
 				Content: "",
 				Width:   10, // Default width
 				BgColor: "236",
@@ -116,6 +122,27 @@ func WithRightLen(n int) BarOptions {
 			}
 		}
 	}
+}
+
+// Set the tag for one elem, and accessable through the map;
+func (m *Model) SetTag(e *Elem, tag string) {
+	if e != nil {
+		e.tag = tag
+		m.ElemsMap[tag] = e
+	}
+}
+
+func (m *Model) GetTag(tag string) *Elem {
+	if m.ElemsMap == nil {
+		return nil
+	}
+
+	// Look up the element by tag
+	elem, exists := m.ElemsMap[tag]
+	if !exists {
+		return nil
+	}
+	return elem
 }
 
 func (m Model) Init() tea.Cmd {
@@ -149,6 +176,10 @@ func (m *Model) AddLeft(w int, c string) *Elem {
 // Remove by id from left partition.
 func (m *Model) RemoveLeft(i int) *Model {
 	if i >= 0 && i < len(m.LeftElems) {
+		elem := m.LeftElems[i]
+		if elem != nil && elem.tag != "" {
+			delete(m.ElemsMap, elem.tag)
+		}
 		m.LeftElems = append(m.LeftElems[:i], m.LeftElems[i+1:]...)
 	}
 	return m
@@ -156,6 +187,10 @@ func (m *Model) RemoveLeft(i int) *Model {
 
 func (m *Model) RemoveRight(i int) *Model {
 	if i >= 0 && i < len(m.RightElems) {
+		elem := m.RightElems[i]
+		if elem != nil && elem.tag != "" {
+			delete(m.ElemsMap, elem.tag)
+		}
 		m.RightElems = append(m.RightElems[:i], m.RightElems[i+1:]...)
 	}
 	return m

@@ -8,19 +8,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/haochend413/bubbles/statusbar"
-	// "github.com/haochending/bubbles/statusbar" // Adjust this path as needed
+	// "github.com/haochending/bubbles/statusbar" // Adjust this import path as needed
 )
 
-// StatusbarDemoModel represents our application state
-type StatusbarDemoModel struct {
+// StatusbarDemo represents our application state
+type StatusbarDemo struct {
 	statusbar statusbar.Model
 	width     int
 	height    int
 	tick      int
-	cpuUsage  int
-	memUsage  int
 	mode      string
 	showHelp  bool
+	showTags  bool
 }
 
 // tickMsg is sent when the timer ticks
@@ -32,39 +31,47 @@ func tickEvery() tea.Cmd {
 	})
 }
 
-func initialModel() StatusbarDemoModel {
-	// Create our statusbar
+func initialModel() StatusbarDemo {
+	// Initialize ElemsMap
 	sb := statusbar.New(
 		statusbar.WithWidth(100),
 		statusbar.WithHeight(1),
 	)
+	sb.ElemsMap = make(map[string]*statusbar.Elem) // Initialize the map
 
-	// Add some elements to the left side
-	sb.AddLeft(20, "Status: Ready").SetColors("0", "46") // Black on green
-	sb.AddLeft(15, "CPU: 42%").SetColors("0", "33")      // Black on blue
-	sb.AddLeft(15, "Mem: 1.2GB").SetColors("0", "177")   // Black on purple
+	// Add elements with tags to left side
+	statusElem := sb.AddLeft(20, "Status: Ready").SetColors("0", "46")
+	sb.SetTag(statusElem, "status")
 
-	// Add some elements to the right side
-	sb.AddRight(22, "Press ? for help").SetColors("252", "236")          // Light text on dark gray
-	sb.AddRight(10, time.Now().Format("15:04:05")).SetColors("0", "226") // Black on yellow
+	cpuElem := sb.AddLeft(15, "CPU: 42%").SetColors("0", "33")
+	sb.SetTag(cpuElem, "cpu")
 
-	return StatusbarDemoModel{
+	memElem := sb.AddLeft(15, "Mem: 1.2GB").SetColors("0", "177")
+	sb.SetTag(memElem, "memory")
+
+	// Add elements with tags to right side
+	helpElem := sb.AddRight(22, "Press ? for help").SetColors("252", "236")
+	sb.SetTag(helpElem, "help")
+
+	timeElem := sb.AddRight(10, time.Now().Format("15:04:05")).SetColors("0", "226")
+	sb.SetTag(timeElem, "time")
+
+	return StatusbarDemo{
 		statusbar: sb,
 		width:     100,
 		height:    30,
 		tick:      0,
-		cpuUsage:  42,
-		memUsage:  30,
 		mode:      "normal",
 		showHelp:  false,
+		showTags:  false,
 	}
 }
 
-func (m StatusbarDemoModel) Init() tea.Cmd {
+func (m StatusbarDemo) Init() tea.Cmd {
 	return tickEvery()
 }
 
-func (m StatusbarDemoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m StatusbarDemo) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -78,29 +85,58 @@ func (m StatusbarDemoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showHelp {
 				helpText = "Press ? to exit help"
 			}
-			m.statusbar.GetRight(0).SetValue(helpText)
+			m.statusbar.GetTag("help").SetValue(helpText)
+
+		case "t":
+			// Toggle tag view
+			m.showTags = !m.showTags
 
 		case "1":
 			// Normal mode
 			m.mode = "normal"
-			m.statusbar.GetLeft(0).SetValue("Status: Ready")
+			statusElem := m.statusbar.GetTag("status")
+			if statusElem != nil {
+				statusElem.SetValue("Status: Ready").SetColors("0", "46")
+			}
 
 		case "2":
 			// Warning mode
 			m.mode = "warning"
-			m.statusbar.GetLeft(0).SetValue("Status: Warning")
+			statusElem := m.statusbar.GetTag("status")
+			if statusElem != nil {
+				statusElem.SetValue("Status: Warning").SetColors("0", "208")
+			}
 
 		case "3":
 			// Error mode
 			m.mode = "error"
-			m.statusbar.GetLeft(0).SetValue("Status: Error")
+			statusElem := m.statusbar.GetTag("status")
+			if statusElem != nil {
+				statusElem.SetValue("Status: Error").SetColors("255", "196")
+			}
 
 		case "c":
 			// Clear CPU/Mem stats
-			m.cpuUsage = 0
-			m.memUsage = 0
-			m.statusbar.GetLeft(1).SetValue("CPU: 0%")
-			m.statusbar.GetLeft(2).SetValue("Mem: 0.0GB")
+			cpuElem := m.statusbar.GetTag("cpu")
+			if cpuElem != nil {
+				cpuElem.SetValue("CPU: 0%")
+			}
+
+			memElem := m.statusbar.GetTag("memory")
+			if memElem != nil {
+				memElem.SetValue("Mem: 0.0GB")
+			}
+
+		case "r":
+			// Remove an element (as a test)
+			if len(m.statusbar.LeftElems) > 0 {
+				m.statusbar.RemoveLeft(len(m.statusbar.LeftElems) - 1)
+			}
+
+		case "a":
+			// Add a new element (as a test)
+			newElem := m.statusbar.AddLeft(15, "Added: "+fmt.Sprint(m.tick)).SetColors("0", "99")
+			m.statusbar.SetTag(newElem, fmt.Sprintf("added-%d", m.tick))
 		}
 
 	case tea.WindowSizeMsg:
@@ -110,49 +146,35 @@ func (m StatusbarDemoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		// Update the time
-		m.statusbar.GetRight(1).SetValue(time.Now().Format("15:04:05"))
+		timeElem := m.statusbar.GetTag("time")
+		if timeElem != nil {
+			timeElem.SetValue(time.Now().Format("15:04:05"))
+		}
 
 		// Update tick counter
 		m.tick++
 
 		// Simulate changing CPU usage
-		cpuDelta := m.tick % 5
-		if m.tick%10 >= 5 {
-			cpuDelta = -cpuDelta
+		cpuValue := 40 + ((m.tick * 5) % 50)
+		cpuElem := m.statusbar.GetTag("cpu")
+		if cpuElem != nil {
+			// Change CPU color based on usage
+			cpuColor := "33" // Default blue
+			if cpuValue > 70 {
+				cpuColor = "208" // Orange for high
+			}
+			if cpuValue > 90 {
+				cpuColor = "196" // Red for very high
+			}
+			cpuElem.SetValue(fmt.Sprintf("CPU: %d%%", cpuValue)).SetColors("0", cpuColor)
 		}
-		m.cpuUsage += cpuDelta
-		if m.cpuUsage < 0 {
-			m.cpuUsage = 0
-		} else if m.cpuUsage > 100 {
-			m.cpuUsage = 100
-		}
-
-		// // Change CPU color based on usage
-		// cpuColor := "33" // Default blue
-		// if m.cpuUsage > 70 {
-		// 	cpuColor = "208" // Orange for high
-		// }
-		// if m.cpuUsage > 90 {
-		// 	cpuColor = "196" // Red for very high
-		// }
-		m.statusbar.GetLeft(1).
-			SetValue(fmt.Sprintf("CPU: %d%%", m.cpuUsage))
-		// 	SetColors("0", cpuColor)
 
 		// Simulate changing memory usage
-		memDelta := (m.tick % 3) * 10
-		if m.tick%6 >= 3 {
-			memDelta = -memDelta
+		memValue := 0.5 + float64((m.tick*7)%70)/20
+		memElem := m.statusbar.GetTag("memory")
+		if memElem != nil {
+			memElem.SetValue(fmt.Sprintf("Mem: %.1fGB", memValue))
 		}
-		m.memUsage += memDelta
-		if m.memUsage < 0 {
-			m.memUsage = 0
-		} else if m.memUsage > 100 {
-			m.memUsage = 100
-		}
-
-		memGB := float64(m.memUsage) / 100 * 4 // Simulate 4GB max
-		m.statusbar.GetLeft(2).SetValue(fmt.Sprintf("Mem: %.1fGB", memGB))
 
 		return m, tickEvery()
 	}
@@ -160,14 +182,19 @@ func (m StatusbarDemoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m StatusbarDemoModel) View() string {
+func (m StatusbarDemo) View() string {
 	if m.showHelp {
 		return helpView(m) + "\n" + m.statusbar.Render()
 	}
+
+	if m.showTags {
+		return tagView(m) + "\n" + m.statusbar.Render()
+	}
+
 	return mainView(m) + "\n" + m.statusbar.Render()
 }
 
-func mainView(m StatusbarDemoModel) string {
+func mainView(m StatusbarDemo) string {
 	s := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height-1). // Subtract 1 for statusbar
@@ -214,14 +241,18 @@ func mainView(m StatusbarDemoModel) string {
 		Foreground(lipgloss.Color("240")). // Dark gray
 		Render(`
 Press ? for help screen
+t to view tag information
 1-3 to change modes
 c to clear stats
+r to remove an element
+a to add an element
 q to quit
 `)
 
-	stats := fmt.Sprintf("CPU: %d%%\nMemory: %.1f GB\nTick: %d",
-		m.cpuUsage,
-		float64(m.memUsage)/100*4,
+	stats := fmt.Sprintf("CPU: %s\nMemory: %s\nTime: %s\nTick: %d",
+		m.statusbar.GetTag("cpu").Content,
+		m.statusbar.GetTag("memory").Content,
+		m.statusbar.GetTag("time").Content,
 		m.tick)
 
 	return s.Render(
@@ -239,7 +270,53 @@ q to quit
 	)
 }
 
-func helpView(m StatusbarDemoModel) string {
+func tagView(m StatusbarDemo) string {
+	s := lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height-1). // Subtract 1 for statusbar
+		Align(lipgloss.Center, lipgloss.Center)
+
+	title := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("39")).
+		Bold(true).
+		MarginBottom(1).
+		Render("STATUSBAR TAG INFORMATION")
+
+	// Display information about tags
+	tagsInfo := "Registered Tags:\n\n"
+
+	// Check if map is initialized
+	if m.statusbar.ElemsMap == nil {
+		tagsInfo += "No tags found (ElemsMap is nil)"
+	} else {
+		for tag, elem := range m.statusbar.ElemsMap {
+			tagsInfo += fmt.Sprintf("Tag: %s\n", tag)
+			tagsInfo += fmt.Sprintf("  Content: %s\n", elem.Content)
+			tagsInfo += fmt.Sprintf("  Colors: fg=%s, bg=%s\n", elem.FgColor, elem.BgColor)
+			tagsInfo += fmt.Sprintf("  Width: %d\n\n", elem.Width)
+		}
+
+		if len(m.statusbar.ElemsMap) == 0 {
+			tagsInfo += "No tags registered."
+		}
+	}
+
+	return s.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Center,
+			title,
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252")).
+				Render(tagsInfo),
+			"",
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240")).
+				Render("Press t to return to main view"),
+		),
+	)
+}
+
+func helpView(m StatusbarDemo) string {
 	s := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height-1). // Subtract 1 for statusbar
@@ -260,10 +337,13 @@ This demo shows the statusbar component in action.
 Keyboard commands:
 -----------------
 ? - Toggle this help screen
+t - View tag information
 1 - Switch to Normal mode
 2 - Switch to Warning mode
 3 - Switch to Error mode
 c - Clear CPU/Memory stats
+r - Remove last left element (test)
+a - Add a new element (test)
 q - Quit application
 
 The statusbar shows:
@@ -272,6 +352,12 @@ The statusbar shows:
 - Memory usage
 - Help hint
 - Current time (updates automatically)
+
+This demo showcases:
+- Element tagging system
+- Dynamic styling
+- Real-time updates
+- Element addition/removal
 `)
 
 	return s.Render(
@@ -297,14 +383,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
-// // This function prints a warning about the for loop issue
-// func fixRangeLoop() {
-// 	fmt.Println("Before running this demo, please fix the following issue in statusbar.go:")
-// 	fmt.Println("In WithLeftLen and WithRightLen functions, change:")
-// 	fmt.Println("for i := range n { ... }")
-// 	fmt.Println("to:")
-// 	fmt.Println("for i := 0; i < n; i++ { ... }")
-// 	fmt.Println("\nPress Enter to continue...")
-// 	fmt.Scanln()
-// }
