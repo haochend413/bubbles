@@ -1064,26 +1064,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
 			m.transposeLeft()
 
-		case key.Matches(msg, m.KeyMap.LineEnd):
-			m.CursorEnd()
-		case key.Matches(msg, m.KeyMap.LineStart):
-			m.CursorStart()
-		case key.Matches(msg, m.KeyMap.CharacterForward):
-			m.characterRight()
-		case key.Matches(msg, m.KeyMap.LineNext):
-			m.CursorDown()
-		case key.Matches(msg, m.KeyMap.WordForward):
-			m.wordRight()
-		case key.Matches(msg, m.KeyMap.CharacterBackward):
-			m.characterLeft(false /* insideLine */)
-		case key.Matches(msg, m.KeyMap.LinePrevious):
-			m.CursorUp()
-		case key.Matches(msg, m.KeyMap.WordBackward):
-			m.wordLeft()
-		case key.Matches(msg, m.KeyMap.InputBegin):
-			m.moveToBegin()
-		case key.Matches(msg, m.KeyMap.InputEnd):
-			m.moveToEnd()
 		default:
 			m.insertRunesFromUserInput(msg.Runes)
 
