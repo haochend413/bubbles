@@ -191,9 +191,6 @@ type Model struct {
 	// General settings.
 	cache *memoization.MemoCache[line, [][]rune]
 
-	// Editable determines if the textarea can be edited by the user.
-	Editable bool
-
 	// Prompt is printed at the beginning of each line.
 	//
 	// When changing the value of Prompt after the model has been
@@ -303,7 +300,6 @@ func New() Model {
 		ShowLineNumbers:      true,
 		Cursor:               cur,
 		KeyMap:               DefaultKeyMap,
-		Editable:             true,
 
 		value: make([][]rune, minHeight, maxLines),
 		focus: false,
@@ -317,11 +313,6 @@ func New() Model {
 	m.SetWidth(defaultWidth)
 
 	return m
-}
-
-// SetEditable sets whether the textarea is editable.
-func (m *Model) SetEditable(editable bool) {
-	m.Editable = editable
 }
 
 // DefaultStyles returns the default styles for focused and blurred states for
@@ -985,125 +976,123 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+
 		// Only allow editing if Editable is true
-		if m.Editable {
-			switch {
-			case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
-				m.col = clamp(m.col, 0, len(m.value[m.row]))
-				if m.col >= len(m.value[m.row]) {
-					m.mergeLineBelow(m.row)
-					break
-				}
-				m.deleteAfterCursor()
-			case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
-				m.col = clamp(m.col, 0, len(m.value[m.row]))
-				if m.col <= 0 {
-					m.mergeLineAbove(m.row)
-					break
-				}
-				m.deleteBeforeCursor()
-			case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
-				m.col = clamp(m.col, 0, len(m.value[m.row]))
-				if m.col <= 0 {
-					m.mergeLineAbove(m.row)
-					break
-				}
-				if len(m.value[m.row]) > 0 {
-					m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
-					if m.col > 0 {
-						m.SetCursor(m.col - 1)
-					}
-				}
-			case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
-				if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
-					m.value[m.row] = append(m.value[m.row][:m.col], m.value[m.row][m.col+1:]...)
-				}
-				if m.col >= len(m.value[m.row]) {
-					m.mergeLineBelow(m.row)
-					break
-				}
-			case key.Matches(msg, m.KeyMap.DeleteWordBackward):
-				if m.col <= 0 {
-					m.mergeLineAbove(m.row)
-					break
-				}
-				m.deleteWordLeft()
-			case key.Matches(msg, m.KeyMap.DeleteWordForward):
-				m.col = clamp(m.col, 0, len(m.value[m.row]))
-				if m.col >= len(m.value[m.row]) {
-					m.mergeLineBelow(m.row)
-					break
-				}
-				m.deleteWordRight()
-			case key.Matches(msg, m.KeyMap.InsertNewline):
-				if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
-					return m, nil
-				}
-				m.col = clamp(m.col, 0, len(m.value[m.row]))
-				m.splitLine(m.row, m.col)
-			case key.Matches(msg, m.KeyMap.LineEnd):
-				m.CursorEnd()
-			case key.Matches(msg, m.KeyMap.LineStart):
-				m.CursorStart()
-			case key.Matches(msg, m.KeyMap.CharacterForward):
-				m.characterRight()
-			case key.Matches(msg, m.KeyMap.LineNext):
-				m.CursorDown()
-			case key.Matches(msg, m.KeyMap.WordForward):
-				m.wordRight()
-			case key.Matches(msg, m.KeyMap.Paste):
-				return m, Paste
-			case key.Matches(msg, m.KeyMap.CharacterBackward):
-				m.characterLeft(false /* insideLine */)
-			case key.Matches(msg, m.KeyMap.LinePrevious):
-				m.CursorUp()
-			case key.Matches(msg, m.KeyMap.WordBackward):
-				m.wordLeft()
-			case key.Matches(msg, m.KeyMap.InputBegin):
-				m.moveToBegin()
-			case key.Matches(msg, m.KeyMap.InputEnd):
-				m.moveToEnd()
-			case key.Matches(msg, m.KeyMap.LowercaseWordForward):
-				m.lowercaseRight()
-			case key.Matches(msg, m.KeyMap.UppercaseWordForward):
-				m.uppercaseRight()
-			case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
-				m.capitalizeRight()
-			case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
-				m.transposeLeft()
-			default:
-				m.insertRunesFromUserInput(msg.Runes)
+
+		switch {
+		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
+			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			if m.col >= len(m.value[m.row]) {
+				m.mergeLineBelow(m.row)
+				break
 			}
-		} else {
-			// Not editable: allow only navigation keys
-			switch {
-			case key.Matches(msg, m.KeyMap.LineEnd):
-				m.CursorEnd()
-			case key.Matches(msg, m.KeyMap.LineStart):
-				m.CursorStart()
-			case key.Matches(msg, m.KeyMap.CharacterForward):
-				m.characterRight()
-			case key.Matches(msg, m.KeyMap.LineNext):
-				m.CursorDown()
-			case key.Matches(msg, m.KeyMap.WordForward):
-				m.wordRight()
-			case key.Matches(msg, m.KeyMap.CharacterBackward):
-				m.characterLeft(false /* insideLine */)
-			case key.Matches(msg, m.KeyMap.LinePrevious):
-				m.CursorUp()
-			case key.Matches(msg, m.KeyMap.WordBackward):
-				m.wordLeft()
-			case key.Matches(msg, m.KeyMap.InputBegin):
-				m.moveToBegin()
-			case key.Matches(msg, m.KeyMap.InputEnd):
-				m.moveToEnd()
+			m.deleteAfterCursor()
+		case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
+			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			if m.col <= 0 {
+				m.mergeLineAbove(m.row)
+				break
 			}
+			m.deleteBeforeCursor()
+		case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
+			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			if m.col <= 0 {
+				m.mergeLineAbove(m.row)
+				break
+			}
+			if len(m.value[m.row]) > 0 {
+				m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
+				if m.col > 0 {
+					m.SetCursor(m.col - 1)
+				}
+			}
+		case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
+			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+				m.value[m.row] = append(m.value[m.row][:m.col], m.value[m.row][m.col+1:]...)
+			}
+			if m.col >= len(m.value[m.row]) {
+				m.mergeLineBelow(m.row)
+				break
+			}
+		case key.Matches(msg, m.KeyMap.DeleteWordBackward):
+			if m.col <= 0 {
+				m.mergeLineAbove(m.row)
+				break
+			}
+			m.deleteWordLeft()
+		case key.Matches(msg, m.KeyMap.DeleteWordForward):
+			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			if m.col >= len(m.value[m.row]) {
+				m.mergeLineBelow(m.row)
+				break
+			}
+			m.deleteWordRight()
+		case key.Matches(msg, m.KeyMap.InsertNewline):
+			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+				return m, nil
+			}
+			m.col = clamp(m.col, 0, len(m.value[m.row]))
+			m.splitLine(m.row, m.col)
+		case key.Matches(msg, m.KeyMap.LineEnd):
+			m.CursorEnd()
+		case key.Matches(msg, m.KeyMap.LineStart):
+			m.CursorStart()
+		case key.Matches(msg, m.KeyMap.CharacterForward):
+			m.characterRight()
+		case key.Matches(msg, m.KeyMap.LineNext):
+			m.CursorDown()
+		case key.Matches(msg, m.KeyMap.WordForward):
+			m.wordRight()
+		case key.Matches(msg, m.KeyMap.Paste):
+			return m, Paste
+		case key.Matches(msg, m.KeyMap.CharacterBackward):
+			m.characterLeft(false /* insideLine */)
+		case key.Matches(msg, m.KeyMap.LinePrevious):
+			m.CursorUp()
+		case key.Matches(msg, m.KeyMap.WordBackward):
+			m.wordLeft()
+		case key.Matches(msg, m.KeyMap.InputBegin):
+			m.moveToBegin()
+		case key.Matches(msg, m.KeyMap.InputEnd):
+			m.moveToEnd()
+		case key.Matches(msg, m.KeyMap.LowercaseWordForward):
+			m.lowercaseRight()
+		case key.Matches(msg, m.KeyMap.UppercaseWordForward):
+			m.uppercaseRight()
+		case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
+			m.capitalizeRight()
+		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
+			m.transposeLeft()
+
+		case key.Matches(msg, m.KeyMap.LineEnd):
+			m.CursorEnd()
+		case key.Matches(msg, m.KeyMap.LineStart):
+			m.CursorStart()
+		case key.Matches(msg, m.KeyMap.CharacterForward):
+			m.characterRight()
+		case key.Matches(msg, m.KeyMap.LineNext):
+			m.CursorDown()
+		case key.Matches(msg, m.KeyMap.WordForward):
+			m.wordRight()
+		case key.Matches(msg, m.KeyMap.CharacterBackward):
+			m.characterLeft(false /* insideLine */)
+		case key.Matches(msg, m.KeyMap.LinePrevious):
+			m.CursorUp()
+		case key.Matches(msg, m.KeyMap.WordBackward):
+			m.wordLeft()
+		case key.Matches(msg, m.KeyMap.InputBegin):
+			m.moveToBegin()
+		case key.Matches(msg, m.KeyMap.InputEnd):
+			m.moveToEnd()
+		default:
+			m.insertRunesFromUserInput(msg.Runes)
+
 		}
 
 	case pasteMsg:
-		if m.Editable {
-			m.insertRunesFromUserInput([]rune(msg))
-		}
+		// if m.Editable {
+		m.insertRunesFromUserInput([]rune(msg))
+		// }
 
 	case pasteErrMsg:
 		m.Err = msg
