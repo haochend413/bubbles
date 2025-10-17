@@ -64,6 +64,8 @@ type KeyMap struct {
 	UppercaseWordForward  key.Binding
 	LowercaseWordForward  key.Binding
 	CapitalizeWordForward key.Binding
+	//key for toggle editable
+	ToggleEditable key.Binding
 
 	TransposeCharacterBackward key.Binding
 }
@@ -89,6 +91,7 @@ var DefaultKeyMap = KeyMap{
 	Paste:                   key.NewBinding(key.WithKeys("ctrl+v"), key.WithHelp("ctrl+v", "paste")),
 	InputBegin:              key.NewBinding(key.WithKeys("alt+<", "ctrl+home"), key.WithHelp("alt+<", "input begin")),
 	InputEnd:                key.NewBinding(key.WithKeys("alt+>", "ctrl+end"), key.WithHelp("alt+>", "input end")),
+	ToggleEditable:          key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("alt+>", "input end")),
 
 	CapitalizeWordForward: key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "capitalize word forward")),
 	LowercaseWordForward:  key.NewBinding(key.WithKeys("alt+l"), key.WithHelp("alt+l", "lowercase word forward")),
@@ -277,6 +280,9 @@ type Model struct {
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
+
+	//controls whether the system is editable
+	Editable bool
 }
 
 // New creates a new model with default settings.
@@ -301,10 +307,11 @@ func New() Model {
 		Cursor:               cur,
 		KeyMap:               DefaultKeyMap,
 
-		value: make([][]rune, minHeight, maxLines),
-		focus: false,
-		col:   0,
-		row:   0,
+		value:    make([][]rune, minHeight, maxLines),
+		focus:    false,
+		col:      0,
+		row:      0,
+		Editable: true,
 
 		viewport: &vp,
 	}
@@ -356,6 +363,10 @@ func (m *Model) InsertString(s string) {
 // InsertRune inserts a rune at the cursor position.
 func (m *Model) InsertRune(r rune) {
 	m.insertRunesFromUserInput([]rune{r})
+}
+
+func (m *Model) ToggleEditable() {
+	m.Editable = !m.Editable
 }
 
 // insertRunesFromUserInput inserts runes at the current cursor position.
@@ -979,94 +990,104 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 		// Only allow editing if Editable is true
 
-		switch {
-		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			if m.col >= len(m.value[m.row]) {
-				m.mergeLineBelow(m.row)
-				break
-			}
-			m.deleteAfterCursor()
-		case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			if m.col <= 0 {
-				m.mergeLineAbove(m.row)
-				break
-			}
-			m.deleteBeforeCursor()
-		case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			if m.col <= 0 {
-				m.mergeLineAbove(m.row)
-				break
-			}
-			if len(m.value[m.row]) > 0 {
-				m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
-				if m.col > 0 {
-					m.SetCursor(m.col - 1)
+		if m.Editable {
+			switch {
+			case key.Matches(msg, m.KeyMap.ToggleEditable):
+				m.ToggleEditable()
+				return m, nil
+			case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
+				m.col = clamp(m.col, 0, len(m.value[m.row]))
+				if m.col >= len(m.value[m.row]) {
+					m.mergeLineBelow(m.row)
+					break
 				}
+				m.deleteAfterCursor()
+			case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
+				m.col = clamp(m.col, 0, len(m.value[m.row]))
+				if m.col <= 0 {
+					m.mergeLineAbove(m.row)
+					break
+				}
+				m.deleteBeforeCursor()
+			case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
+				m.col = clamp(m.col, 0, len(m.value[m.row]))
+				if m.col <= 0 {
+					m.mergeLineAbove(m.row)
+					break
+				}
+				if len(m.value[m.row]) > 0 {
+					m.value[m.row] = append(m.value[m.row][:max(0, m.col-1)], m.value[m.row][m.col:]...)
+					if m.col > 0 {
+						m.SetCursor(m.col - 1)
+					}
+				}
+			case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
+				if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
+					m.value[m.row] = append(m.value[m.row][:m.col], m.value[m.row][m.col+1:]...)
+				}
+				if m.col >= len(m.value[m.row]) {
+					m.mergeLineBelow(m.row)
+					break
+				}
+			case key.Matches(msg, m.KeyMap.DeleteWordBackward):
+				if m.col <= 0 {
+					m.mergeLineAbove(m.row)
+					break
+				}
+				m.deleteWordLeft()
+			case key.Matches(msg, m.KeyMap.DeleteWordForward):
+				m.col = clamp(m.col, 0, len(m.value[m.row]))
+				if m.col >= len(m.value[m.row]) {
+					m.mergeLineBelow(m.row)
+					break
+				}
+				m.deleteWordRight()
+			case key.Matches(msg, m.KeyMap.InsertNewline):
+				if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+					return m, nil
+				}
+				m.col = clamp(m.col, 0, len(m.value[m.row]))
+				m.splitLine(m.row, m.col)
+			case key.Matches(msg, m.KeyMap.LineEnd):
+				m.CursorEnd()
+			case key.Matches(msg, m.KeyMap.LineStart):
+				m.CursorStart()
+			case key.Matches(msg, m.KeyMap.CharacterForward):
+				m.characterRight()
+			case key.Matches(msg, m.KeyMap.LineNext):
+				m.CursorDown()
+			case key.Matches(msg, m.KeyMap.WordForward):
+				m.wordRight()
+			case key.Matches(msg, m.KeyMap.Paste):
+				return m, Paste
+			case key.Matches(msg, m.KeyMap.CharacterBackward):
+				m.characterLeft(false /* insideLine */)
+			case key.Matches(msg, m.KeyMap.LinePrevious):
+				m.CursorUp()
+			case key.Matches(msg, m.KeyMap.WordBackward):
+				m.wordLeft()
+			case key.Matches(msg, m.KeyMap.InputBegin):
+				m.moveToBegin()
+			case key.Matches(msg, m.KeyMap.InputEnd):
+				m.moveToEnd()
+			case key.Matches(msg, m.KeyMap.LowercaseWordForward):
+				m.lowercaseRight()
+			case key.Matches(msg, m.KeyMap.UppercaseWordForward):
+				m.uppercaseRight()
+			case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
+				m.capitalizeRight()
+			case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
+				m.transposeLeft()
+
+			default:
+				m.insertRunesFromUserInput(msg.Runes)
 			}
-		case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
-			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
-				m.value[m.row] = append(m.value[m.row][:m.col], m.value[m.row][m.col+1:]...)
-			}
-			if m.col >= len(m.value[m.row]) {
-				m.mergeLineBelow(m.row)
-				break
-			}
-		case key.Matches(msg, m.KeyMap.DeleteWordBackward):
-			if m.col <= 0 {
-				m.mergeLineAbove(m.row)
-				break
-			}
-			m.deleteWordLeft()
-		case key.Matches(msg, m.KeyMap.DeleteWordForward):
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			if m.col >= len(m.value[m.row]) {
-				m.mergeLineBelow(m.row)
-				break
-			}
-			m.deleteWordRight()
-		case key.Matches(msg, m.KeyMap.InsertNewline):
-			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+		} else {
+			switch {
+			case key.Matches(msg, m.KeyMap.ToggleEditable):
+				m.ToggleEditable()
 				return m, nil
 			}
-			m.col = clamp(m.col, 0, len(m.value[m.row]))
-			m.splitLine(m.row, m.col)
-		case key.Matches(msg, m.KeyMap.LineEnd):
-			m.CursorEnd()
-		case key.Matches(msg, m.KeyMap.LineStart):
-			m.CursorStart()
-		case key.Matches(msg, m.KeyMap.CharacterForward):
-			m.characterRight()
-		case key.Matches(msg, m.KeyMap.LineNext):
-			m.CursorDown()
-		case key.Matches(msg, m.KeyMap.WordForward):
-			m.wordRight()
-		case key.Matches(msg, m.KeyMap.Paste):
-			return m, Paste
-		case key.Matches(msg, m.KeyMap.CharacterBackward):
-			m.characterLeft(false /* insideLine */)
-		case key.Matches(msg, m.KeyMap.LinePrevious):
-			m.CursorUp()
-		case key.Matches(msg, m.KeyMap.WordBackward):
-			m.wordLeft()
-		case key.Matches(msg, m.KeyMap.InputBegin):
-			m.moveToBegin()
-		case key.Matches(msg, m.KeyMap.InputEnd):
-			m.moveToEnd()
-		case key.Matches(msg, m.KeyMap.LowercaseWordForward):
-			m.lowercaseRight()
-		case key.Matches(msg, m.KeyMap.UppercaseWordForward):
-			m.uppercaseRight()
-		case key.Matches(msg, m.KeyMap.CapitalizeWordForward):
-			m.capitalizeRight()
-		case key.Matches(msg, m.KeyMap.TransposeCharacterBackward):
-			m.transposeLeft()
-
-		default:
-			m.insertRunesFromUserInput(msg.Runes)
-
 		}
 
 	case pasteMsg:
