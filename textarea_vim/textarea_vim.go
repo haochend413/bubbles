@@ -16,6 +16,7 @@ import (
 	"github.com/haochend413/bubbles/cursor"
 	"github.com/haochend413/bubbles/key"
 	"github.com/haochend413/bubbles/runeutil"
+	statusbar "github.com/haochend413/bubbles/statusbar"
 	"github.com/haochend413/bubbles/textarea/memoization"
 	"github.com/haochend413/bubbles/viewport"
 	rw "github.com/mattn/go-runewidth"
@@ -283,6 +284,9 @@ type Model struct {
 
 	//controls whether the system is editable
 	Editable bool
+
+	//statusbar
+	Statusbar *statusbar.Model
 }
 
 // New creates a new model with default settings.
@@ -290,6 +294,21 @@ func New() Model {
 	vp := viewport.New(0, 0)
 	vp.KeyMap = viewport.KeyMap{}
 	cur := cursor.New()
+
+	sb := statusbar.New(
+		statusbar.WithHeight(1),
+		statusbar.WithWidth(100),
+		statusbar.WithLeftLen(1),
+	)
+
+	// Configure all left elements in sequence
+	sb.GetLeft(0).SetValue("Editable").SetColors("0", "39").SetWidth(15)
+
+	//set tags for quick and consistent access
+	sb.SetTag(sb.GetLeft(0), "filter")
+
+	// You can also chain model methods
+	sb.SetWidth(100).SetHeight(1)
 
 	focusedStyle, blurredStyle := DefaultStyles()
 
@@ -313,7 +332,8 @@ func New() Model {
 		row:      0,
 		Editable: true,
 
-		viewport: &vp,
+		viewport:  &vp,
+		Statusbar: &sb,
 	}
 
 	m.SetHeight(defaultHeight)
@@ -987,13 +1007,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-
 		// Only allow editing if Editable is true
 
 		if m.Editable {
 			switch {
 			case key.Matches(msg, m.KeyMap.ToggleEditable):
 				m.ToggleEditable()
+				m.Statusbar.GetLeft(0).SetValue("Uneditable")
 				return m, nil
 			case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 				m.col = clamp(m.col, 0, len(m.value[m.row]))
@@ -1086,7 +1106,30 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			switch {
 			case key.Matches(msg, m.KeyMap.ToggleEditable):
 				m.ToggleEditable()
+				m.Statusbar.GetLeft(0).SetValue("Editable")
 				return m, nil
+			case key.Matches(msg, m.KeyMap.LineEnd):
+				m.CursorEnd()
+			case key.Matches(msg, m.KeyMap.LineStart):
+				m.CursorStart()
+			case key.Matches(msg, m.KeyMap.CharacterForward):
+				m.characterRight()
+			case key.Matches(msg, m.KeyMap.LineNext):
+				m.CursorDown()
+			case key.Matches(msg, m.KeyMap.WordForward):
+				m.wordRight()
+			case key.Matches(msg, m.KeyMap.Paste):
+				return m, Paste
+			case key.Matches(msg, m.KeyMap.CharacterBackward):
+				m.characterLeft(false /* insideLine */)
+			case key.Matches(msg, m.KeyMap.LinePrevious):
+				m.CursorUp()
+			case key.Matches(msg, m.KeyMap.WordBackward):
+				m.wordLeft()
+			case key.Matches(msg, m.KeyMap.InputBegin):
+				m.moveToBegin()
+			case key.Matches(msg, m.KeyMap.InputEnd):
+				m.moveToEnd()
 			}
 		}
 
@@ -1223,7 +1266,8 @@ func (m Model) View() string {
 	}
 
 	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+	sb_string := m.Statusbar.View()
+	return m.style.Base.Render(m.viewport.View() + sb_string)
 }
 
 // formatLineNumber formats the line number for display dynamically based on
