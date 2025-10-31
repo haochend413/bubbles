@@ -297,20 +297,18 @@ func New() Model {
 
 	sb := statusbar.New(
 		statusbar.WithHeight(1),
-		statusbar.WithWidth(100),
-		statusbar.WithLeftLen(2),
+		statusbar.WithWidth(50),
+		statusbar.WithLeftLen(1),
+		statusbar.WithRightLen(1),
 	)
 
 	// Configure all left elements in sequence
 	sb.GetLeft(0).SetValue("Editable").SetColors("0", "39").SetWidth(15)
-	sb.GetLeft(1).SetValue("Ln 1, Col 1").SetColors("0", "12").SetWidth(15)
+	sb.GetRight(0).SetValue("Ln 1, Col 1").SetColors("0", "12").SetWidth(15)
 
 	//set tags for quick and consistent access
 	sb.SetTag(sb.GetLeft(0), "filter")
-	sb.SetTag(sb.GetLeft(1), "lineInfo")
-
-	// You can also chain model methods
-	sb.SetWidth(100).SetHeight(1)
+	sb.SetTag(sb.GetRight(0), "lineInfo")
 
 	focusedStyle, blurredStyle := DefaultStyles()
 
@@ -1145,7 +1143,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	// Update status bar with current line and column
-	m.Statusbar.GetLeft(1).SetValue(fmt.Sprintf("Ln %d, Col %d", m.cursorLineNumber()+1, m.col+1))
+	m.Statusbar.GetRight(0).SetValue(fmt.Sprintf("Ln %d, Col %d", m.cursorLineNumber()+1, m.col+1))
+
+	// Update width of status bar to match viewport
+	m.Statusbar.SetWidth(m.viewport.Width)
 
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = &vp
