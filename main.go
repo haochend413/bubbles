@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,10 +12,11 @@ import (
 )
 
 type model struct {
-	textarea textarea_vim.Model
-	width    int
-	height   int
-	showHelp bool
+	textarea    textarea_vim.Model
+	width       int
+	height      int
+	showHelp    bool
+	keypressIdx int
 }
 
 type tickMsg time.Time
@@ -32,10 +34,11 @@ func initialModel() model {
 	ta.Focus()       // Ensure textarea is focused
 
 	return model{
-		textarea: ta,
-		width:    0,
-		height:   0,
-		showHelp: false,
+		textarea:    ta,
+		width:       0,
+		height:      0,
+		showHelp:    false,
+		keypressIdx: 0,
 	}
 }
 
@@ -51,6 +54,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		fmt.Printf("\r\033[K")
+		fmt.Printf(strconv.Itoa(m.keypressIdx) + ":" + msg.String())
+		m.keypressIdx += 1
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
