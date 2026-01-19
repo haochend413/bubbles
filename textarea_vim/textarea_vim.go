@@ -300,23 +300,18 @@ func New() Model {
 
 	sb := statusbar.New(
 		statusbar.WithHeight(1),
-		statusbar.WithWidth(50),
-		statusbar.WithLeftLen(1),
-		statusbar.WithRightLen(1),
+		statusbar.WithWidth(defaultWidth),
+		statusbar.WithLeftLen(2),
+		statusbar.WithRightLen(0),
 	)
 
-	// Configure left element for mode indicator
-	sb.GetLeft(0).SetValue("INSERT").SetColors("0", "34").SetWidth(10)
-
-	// Configure right element for char/word count
-	sb.GetRight(0).SetValue("0 chars | 0 words").SetColors("252", "236").SetWidth(20)
+	// Configure left elements: mode indicator and word/char count side by side
+	sb.GetLeft(0).SetValue("INSERT").SetColors("0", "34").SetWidth(8)
+	sb.GetLeft(1).SetValue("0 chars | 0 words").SetColors("252", "236").SetWidth(25)
 
 	// Set tags for quick and consistent access
 	sb.SetTag(sb.GetLeft(0), "mode")
-	sb.SetTag(sb.GetRight(0), "count")
-
-	// You can also chain model methods
-	sb.SetWidth(100).SetHeight(1)
+	sb.SetTag(sb.GetLeft(1), "count")
 
 	focusedStyle, blurredStyle := DefaultStyles()
 
@@ -324,7 +319,7 @@ func New() Model {
 		CharLimit:            defaultCharLimit,
 		MaxHeight:            defaultMaxHeight,
 		MaxWidth:             defaultMaxWidth,
-		Prompt:               lipgloss.ThickBorder().Left + " ",
+		Prompt:               "",
 		style:                &blurredStyle,
 		FocusedStyle:         focusedStyle,
 		BlurredStyle:         blurredStyle,
@@ -354,7 +349,7 @@ func New() Model {
 // the textarea.
 func DefaultStyles() (Style, Style) {
 	focused := Style{
-		Base:             lipgloss.NewStyle(),
+		Base:             lipgloss.NewStyle().Padding(0).Margin(0).Border(lipgloss.NormalBorder(), false, false, false, false),
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.AdaptiveColor{Light: "255", Dark: "0"}),
 		CursorLineNumber: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240"}),
 		EndOfBuffer:      lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "254", Dark: "0"}),
@@ -364,7 +359,7 @@ func DefaultStyles() (Style, Style) {
 		Text:             lipgloss.NewStyle(),
 	}
 	blurred := Style{
-		Base:             lipgloss.NewStyle(),
+		Base:             lipgloss.NewStyle().Padding(0).Margin(0).Border(lipgloss.NormalBorder(), false, false, false, false),
 		CursorLine:       lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "245", Dark: "7"}),
 		CursorLineNumber: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "249", Dark: "7"}),
 		EndOfBuffer:      lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "254", Dark: "0"}),
@@ -381,16 +376,19 @@ func DefaultStyles() (Style, Style) {
 func (m *Model) SetValue(s string) {
 	m.Reset()
 	m.InsertString(s)
+	m.updateWordCount()
 }
 
 // InsertString inserts a string at the cursor position.
 func (m *Model) InsertString(s string) {
 	m.insertRunesFromUserInput([]rune(s))
+	m.updateWordCount()
 }
 
 // InsertRune inserts a rune at the cursor position.
 func (m *Model) InsertRune(r rune) {
 	m.insertRunesFromUserInput([]rune{r})
+	m.updateWordCount()
 }
 
 // SetInsertMode sets the textarea to INSERT mode
@@ -450,6 +448,8 @@ func (m *Model) insertRunesFromUserInput(runes []rune) {
 			runes = runes[:availSpace]
 		}
 	}
+
+	m.updateWordCount()
 
 	// Split the input into lines.
 	var lines [][]rune
@@ -1182,9 +1182,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Err = msg
 	}
 
-	// Update status bar with current line and column
-	m.Statusbar.GetRight(0).SetValue(fmt.Sprintf("Ln %d, Col %d", m.cursorLineNumber()+1, m.col+1))
-
 	// Update width of status bar to match viewport
 	m.Statusbar.SetWidth(m.viewport.Width)
 
@@ -1315,8 +1312,13 @@ func (m Model) View() string {
 	}
 
 	m.viewport.SetContent(s.String())
-	sb_string := m.Statusbar.View()
-	return m.style.Base.Render(m.viewport.View() + sb_string)
+
+	// Ensure statusbar width matches the component width
+	m.Statusbar.SetWidth(m.Width())
+	m.Statusbar.SetHeight(1)
+	sbView := m.Statusbar.View()
+
+	return m.style.Base.Render(m.viewport.View() + "\n" + sbView)
 }
 
 // formatLineNumber formats the line number for display dynamically based on
@@ -1415,7 +1417,13 @@ func (m Model) placeholderView() string {
 	}
 
 	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+
+	// Ensure statusbar width matches the viewport width (full component width)
+	m.Statusbar.SetWidth(m.viewport.Width)
+	m.Statusbar.SetHeight(1)
+	sbView := m.Statusbar.View()
+
+	return m.style.Base.Render(m.viewport.View() + "\n" + sbView)
 }
 
 // Blink returns the blink command for the cursor.

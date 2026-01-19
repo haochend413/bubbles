@@ -49,9 +49,10 @@ func (e Elem) Render(h int) string {
 		Foreground(lipgloss.Color(e.FgColor)).
 		Background(lipgloss.Color(e.BgColor)).
 		Width(e.Width).
-		Height(h)
+		Height(h).
+		Align(lipgloss.Center)
 
-	return style.Render(" " + e.Content)
+	return style.Render(e.Content)
 }
 
 type Model struct {
