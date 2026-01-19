@@ -353,10 +353,28 @@ func (m Model) Cursor() int {
 	return m.cursor
 }
 
+// YOffset returns the viewport's vertical scroll offset.
+func (m Model) YOffset() int {
+	return m.viewport.YOffset
+}
+
+// SetYOffset sets the viewport's vertical scroll offset.
+func (m *Model) SetYOffset(n int) {
+	m.viewport.YOffset = n
+}
+
 // SetCursor sets the cursor position in the table.
 func (m *Model) SetCursor(n int) {
 	m.cursor = clamp(n, 0, len(m.rows)-1)
 	m.UpdateViewport()
+}
+
+// SetCursorAndOffset sets both the cursor position and viewport offset.
+// This is useful for restoring complete viewport state (e.g., between program launches).
+func (m *Model) SetCursorAndOffset(cursor, offset int) {
+	m.cursor = clamp(cursor, 0, len(m.rows)-1)
+	m.UpdateViewport()
+	m.viewport.YOffset = clamp(offset, 0, m.viewport.Height)
 }
 
 // MoveUp moves the selection up by any number of rows.
