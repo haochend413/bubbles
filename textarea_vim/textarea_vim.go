@@ -16,6 +16,7 @@ import (
 	"github.com/haochend413/bubbles/cursor"
 	"github.com/haochend413/bubbles/key"
 	"github.com/haochend413/bubbles/runeutil"
+	statusbar "github.com/haochend413/bubbles/statusbar"
 	"github.com/haochend413/bubbles/textarea/memoization"
 	"github.com/haochend413/bubbles/viewport"
 	rw "github.com/mattn/go-runewidth"
@@ -64,8 +65,9 @@ type KeyMap struct {
 	UppercaseWordForward  key.Binding
 	LowercaseWordForward  key.Binding
 	CapitalizeWordForward key.Binding
-	//key for toggle editable
-	ToggleEditable key.Binding
+	// Keys for toggling between VIEW and INSERT modes
+	EnterInsertMode key.Binding
+	EnterViewMode   key.Binding
 
 	TransposeCharacterBackward key.Binding
 }
@@ -91,11 +93,13 @@ var DefaultKeyMap = KeyMap{
 	Paste:                   key.NewBinding(key.WithKeys("ctrl+v"), key.WithHelp("ctrl+v", "paste")),
 	InputBegin:              key.NewBinding(key.WithKeys("alt+<", "ctrl+home"), key.WithHelp("alt+<", "input begin")),
 	InputEnd:                key.NewBinding(key.WithKeys("alt+>", "ctrl+end"), key.WithHelp("alt+>", "input end")),
-	ToggleEditable:          key.NewBinding(key.WithKeys("ctrl+e"), key.WithHelp("alt+>", "input end")),
 
 	CapitalizeWordForward: key.NewBinding(key.WithKeys("alt+c"), key.WithHelp("alt+c", "capitalize word forward")),
 	LowercaseWordForward:  key.NewBinding(key.WithKeys("alt+l"), key.WithHelp("alt+l", "lowercase word forward")),
 	UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
+
+	EnterInsertMode: key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "enter insert mode")),
+	EnterViewMode:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "enter view mode")),
 
 	TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
 }
@@ -281,8 +285,11 @@ type Model struct {
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
 
-	//controls whether the system is editable
-	Editable bool
+	// InsertMode controls whether the textarea is in INSERT mode (true) or VIEW mode (false)
+	InsertMode bool
+
+	//statusbar
+	Statusbar *statusbar.Model
 }
 
 // New creates a new model with default settings.
@@ -291,13 +298,28 @@ func New() Model {
 	vp.KeyMap = viewport.KeyMap{}
 	cur := cursor.New()
 
+	sb := statusbar.New(
+		statusbar.WithHeight(1),
+		statusbar.WithWidth(defaultWidth),
+		statusbar.WithLeftLen(2),
+		statusbar.WithRightLen(0),
+	)
+
+	// Configure left elements: mode indicator and word/char count side by side
+	sb.GetLeft(0).SetValue("INSERT").SetColors("0", "34").SetWidth(8)
+	sb.GetLeft(1).SetValue("0 chars | 0 words").SetColors("252", "236").SetWidth(25)
+
+	// Set tags for quick and consistent access
+	sb.SetTag(sb.GetLeft(0), "mode")
+	sb.SetTag(sb.GetLeft(1), "count")
+
 	focusedStyle, blurredStyle := DefaultStyles()
 
 	m := Model{
 		CharLimit:            defaultCharLimit,
 		MaxHeight:            defaultMaxHeight,
 		MaxWidth:             defaultMaxWidth,
-		Prompt:               lipgloss.ThickBorder().Left + " ",
+		Prompt:               "",
 		style:                &blurredStyle,
 		FocusedStyle:         focusedStyle,
 		BlurredStyle:         blurredStyle,
@@ -307,13 +329,14 @@ func New() Model {
 		Cursor:               cur,
 		KeyMap:               DefaultKeyMap,
 
-		value:    make([][]rune, minHeight, maxLines),
-		focus:    false,
-		col:      0,
-		row:      0,
-		Editable: true,
+		value:      make([][]rune, minHeight, maxLines),
+		focus:      false,
+		col:        0,
+		row:        0,
+		InsertMode: true,
 
-		viewport: &vp,
+		viewport:  &vp,
+		Statusbar: &sb,
 	}
 
 	m.SetHeight(defaultHeight)
@@ -326,7 +349,7 @@ func New() Model {
 // the textarea.
 func DefaultStyles() (Style, Style) {
 	focused := Style{
-		Base:             lipgloss.NewStyle(),
+		Base:             lipgloss.NewStyle().Padding(0).Margin(0).Border(lipgloss.NormalBorder(), false, false, false, false),
 		CursorLine:       lipgloss.NewStyle().Background(lipgloss.AdaptiveColor{Light: "255", Dark: "0"}),
 		CursorLineNumber: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240"}),
 		EndOfBuffer:      lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "254", Dark: "0"}),
@@ -336,7 +359,7 @@ func DefaultStyles() (Style, Style) {
 		Text:             lipgloss.NewStyle(),
 	}
 	blurred := Style{
-		Base:             lipgloss.NewStyle(),
+		Base:             lipgloss.NewStyle().Padding(0).Margin(0).Border(lipgloss.NormalBorder(), false, false, false, false),
 		CursorLine:       lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "245", Dark: "7"}),
 		CursorLineNumber: lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "249", Dark: "7"}),
 		EndOfBuffer:      lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "254", Dark: "0"}),
@@ -353,20 +376,57 @@ func DefaultStyles() (Style, Style) {
 func (m *Model) SetValue(s string) {
 	m.Reset()
 	m.InsertString(s)
+	m.updateWordCount()
 }
 
 // InsertString inserts a string at the cursor position.
 func (m *Model) InsertString(s string) {
 	m.insertRunesFromUserInput([]rune(s))
+	m.updateWordCount()
 }
 
 // InsertRune inserts a rune at the cursor position.
 func (m *Model) InsertRune(r rune) {
 	m.insertRunesFromUserInput([]rune{r})
+	m.updateWordCount()
 }
 
-func (m *Model) ToggleEditable() {
-	m.Editable = !m.Editable
+// SetInsertMode sets the textarea to INSERT mode
+func (m *Model) SetInsertMode() {
+	m.InsertMode = true
+	if m.Statusbar != nil {
+		if elem := m.Statusbar.GetTag("mode"); elem != nil {
+			elem.SetValue("INSERT").SetColors("0", "34")
+		}
+	}
+}
+
+// SetViewMode sets the textarea to VIEW mode
+func (m *Model) SetViewMode() {
+	m.InsertMode = false
+	if m.Statusbar != nil {
+		if elem := m.Statusbar.GetTag("mode"); elem != nil {
+			elem.SetValue("VIEW").SetColors("0", "39")
+		}
+	}
+}
+
+// updateWordCount updates the character and word count in the statusbar
+func (m *Model) updateWordCount() {
+	if m.Statusbar == nil {
+		return
+	}
+	elem := m.Statusbar.GetTag("count")
+	if elem == nil {
+		return
+	}
+	text := m.Value()
+	chars := len([]rune(text))
+	words := 0
+	if len(strings.TrimSpace(text)) > 0 {
+		words = len(strings.Fields(text))
+	}
+	elem.SetValue(fmt.Sprintf("%d chars | %d words", chars, words))
 }
 
 // insertRunesFromUserInput inserts runes at the current cursor position.
@@ -388,6 +448,8 @@ func (m *Model) insertRunesFromUserInput(runes []rune) {
 			runes = runes[:availSpace]
 		}
 	}
+
+	m.updateWordCount()
 
 	// Split the input into lines.
 	var lines [][]rune
@@ -987,13 +1049,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-
-		// Only allow editing if Editable is true
-
-		if m.Editable {
+		// Handle INSERT mode (allows editing)
+		if m.InsertMode {
 			switch {
-			case key.Matches(msg, m.KeyMap.ToggleEditable):
-				m.ToggleEditable()
+			case key.Matches(msg, m.KeyMap.EnterViewMode):
+				m.SetViewMode()
 				return m, nil
 			case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 				m.col = clamp(m.col, 0, len(m.value[m.row]))
@@ -1083,10 +1143,33 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.insertRunesFromUserInput(msg.Runes)
 			}
 		} else {
+			// VIEW mode - navigation only, no editing
 			switch {
-			case key.Matches(msg, m.KeyMap.ToggleEditable):
-				m.ToggleEditable()
+			case key.Matches(msg, m.KeyMap.EnterInsertMode):
+				m.SetInsertMode()
 				return m, nil
+			case key.Matches(msg, m.KeyMap.LineEnd):
+				m.CursorEnd()
+			case key.Matches(msg, m.KeyMap.LineStart):
+				m.CursorStart()
+			case key.Matches(msg, m.KeyMap.CharacterForward):
+				m.characterRight()
+			case key.Matches(msg, m.KeyMap.LineNext):
+				m.CursorDown()
+			case key.Matches(msg, m.KeyMap.WordForward):
+				m.wordRight()
+			case key.Matches(msg, m.KeyMap.Paste):
+				return m, Paste
+			case key.Matches(msg, m.KeyMap.CharacterBackward):
+				m.characterLeft(false /* insideLine */)
+			case key.Matches(msg, m.KeyMap.LinePrevious):
+				m.CursorUp()
+			case key.Matches(msg, m.KeyMap.WordBackward):
+				m.wordLeft()
+			case key.Matches(msg, m.KeyMap.InputBegin):
+				m.moveToBegin()
+			case key.Matches(msg, m.KeyMap.InputEnd):
+				m.moveToEnd()
 			}
 		}
 
@@ -1099,6 +1182,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Err = msg
 	}
 
+	// Update width of status bar to match viewport
+	m.Statusbar.SetWidth(m.viewport.Width)
+
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = &vp
 	cmds = append(cmds, cmd)
@@ -1110,6 +1196,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		cmd = m.Cursor.BlinkCmd()
 	}
 	cmds = append(cmds, cmd)
+
+	// Update the word/character count in statusbar
+	m.updateWordCount()
 
 	m.repositionView()
 
@@ -1223,7 +1312,13 @@ func (m Model) View() string {
 	}
 
 	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+
+	// Ensure statusbar width matches the component width
+	m.Statusbar.SetWidth(m.Width())
+	m.Statusbar.SetHeight(1)
+	sbView := m.Statusbar.View()
+
+	return m.style.Base.Render(m.viewport.View() + "\n" + sbView)
 }
 
 // formatLineNumber formats the line number for display dynamically based on
@@ -1322,7 +1417,13 @@ func (m Model) placeholderView() string {
 	}
 
 	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+
+	// Ensure statusbar width matches the viewport width (full component width)
+	m.Statusbar.SetWidth(m.viewport.Width)
+	m.Statusbar.SetHeight(1)
+	sbView := m.Statusbar.View()
+
+	return m.style.Base.Render(m.viewport.View() + "\n" + sbView)
 }
 
 // Blink returns the blink command for the cursor.
