@@ -300,7 +300,7 @@ func New() Model {
 
 	sb := statusbar.New(
 		statusbar.WithHeight(1),
-		statusbar.WithWidth(100),
+		statusbar.WithWidth(50),
 		statusbar.WithLeftLen(1),
 		statusbar.WithRightLen(1),
 	)
@@ -1181,6 +1181,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case pasteErrMsg:
 		m.Err = msg
 	}
+
+	// Update status bar with current line and column
+	m.Statusbar.GetRight(0).SetValue(fmt.Sprintf("Ln %d, Col %d", m.cursorLineNumber()+1, m.col+1))
+
+	// Update width of status bar to match viewport
+	m.Statusbar.SetWidth(m.viewport.Width)
 
 	vp, cmd := m.viewport.Update(msg)
 	m.viewport = &vp
