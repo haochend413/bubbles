@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/haochend413/bubbles/key"
@@ -391,11 +391,11 @@ func ViewUp(m Model, lines []string) tea.Cmd {
 	if len(lines) == 0 {
 		return nil
 	}
-	top, bottom := m.scrollArea()
+	// top, bottom := m.scrollArea()
 
 	// XXX: high performance rendering is deprecated in Bubble Tea. In a v2 we
 	// won't need to return a command here.
-	return tea.ScrollUp(lines, top, bottom)
+	return nil
 }
 
 // Update handles standard message-based viewport updates.

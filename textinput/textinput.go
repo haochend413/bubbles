@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/haochend413/bubbles/cursor"
@@ -619,7 +619,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.previousSuggestion()
 		default:
 			// Input one or more regular characters.
-			m.insertRunesFromUserInput(msg.Runes)
+			m.insertRunesFromUserInput([]rune(msg.Key().Text))
 		}
 
 		// Check again if can be completed
