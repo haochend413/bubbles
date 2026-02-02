@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func Test_CurrentSuggestion(t *testing.T) {
@@ -106,7 +106,7 @@ func ExampleValidateFunc() {
 }
 
 func keyPress(key rune) tea.Msg {
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{key}, Alt: false}
+	return tea.KeyPressMsg{Text: string(key)}
 }
 
 func sendString(m Model, str string) Model {
