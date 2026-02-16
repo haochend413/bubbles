@@ -50,6 +50,10 @@ type KeyMap struct {
 	GotoBottom   key.Binding
 }
 
+// MoveSelectMsg is sent when a row is selected in the table.
+// It contains a pointer to the selected row.
+type MoveSelectMsg struct{ Row *Row }
+
 // ShortHelp implements the KeyMap interface.
 func (km KeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{km.LineUp, km.LineDown}
@@ -208,21 +212,21 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.KeyMap.LineUp):
-			m.MoveUp(1)
+			return m, m.MoveUp(1)
 		case key.Matches(msg, m.KeyMap.LineDown):
-			m.MoveDown(1)
+			return m, m.MoveDown(1)
 		case key.Matches(msg, m.KeyMap.PageUp):
-			m.MoveUp(m.viewport.Height())
+			return m, m.MoveUp(m.viewport.Height())
 		case key.Matches(msg, m.KeyMap.PageDown):
-			m.MoveDown(m.viewport.Height())
+			return m, m.MoveDown(m.viewport.Height())
 		case key.Matches(msg, m.KeyMap.HalfPageUp):
-			m.MoveUp(m.viewport.Height() / 2) //nolint:mnd
+			return m, m.MoveUp(m.viewport.Height() / 2) //nolint:mnd
 		case key.Matches(msg, m.KeyMap.HalfPageDown):
-			m.MoveDown(m.viewport.Height() / 2) //nolint:mnd
+			return m, m.MoveDown(m.viewport.Height() / 2) //nolint:mnd
 		case key.Matches(msg, m.KeyMap.GotoTop):
-			m.GotoTop()
+			return m, m.GotoTop()
 		case key.Matches(msg, m.KeyMap.GotoBottom):
-			m.GotoBottom()
+			return m, m.GotoBottom()
 		}
 	}
 
@@ -346,15 +350,33 @@ func (m Model) Cursor() int {
 	return m.cursor
 }
 
+// YOffset returns the viewport's vertical scroll offset.
+func (m Model) YOffset() int {
+	return m.viewport.YOffset()
+}
+
+// SetYOffset sets the viewport's vertical scroll offset.
+func (m *Model) SetYOffset(n int) {
+	m.viewport.SetYOffset(n)
+}
+
 // SetCursor sets the cursor position in the table.
 func (m *Model) SetCursor(n int) {
 	m.cursor = clamp(n, 0, len(m.rows)-1)
 	m.UpdateViewport()
 }
 
+// SetCursorAndOffset sets both the cursor position and viewport offset.
+// This is useful for restoring complete viewport state (e.g., between program launches).
+func (m *Model) SetCursorAndOffset(cursor, offset int) {
+	m.cursor = clamp(cursor, 0, len(m.rows)-1)
+	m.UpdateViewport()
+	m.viewport.SetYOffset(clamp(offset, 0, m.viewport.Height()))
+}
+
 // MoveUp moves the selection up by any number of rows.
 // It can not go above the first row.
-func (m *Model) MoveUp(n int) {
+func (m *Model) MoveUp(n int) tea.Cmd {
 	m.cursor = clamp(m.cursor-n, 0, len(m.rows)-1)
 
 	offset := m.viewport.YOffset()
@@ -368,11 +390,18 @@ func (m *Model) MoveUp(n int) {
 	}
 	m.viewport.SetYOffset(offset)
 	m.UpdateViewport()
+
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // MoveDown moves the selection down by any number of rows.
 // It can not go below the last row.
-func (m *Model) MoveDown(n int) {
+func (m *Model) MoveDown(n int) tea.Cmd {
 	m.cursor = clamp(m.cursor+n, 0, len(m.rows)-1)
 	m.UpdateViewport()
 
@@ -387,16 +416,35 @@ func (m *Model) MoveDown(n int) {
 		offset = clamp(offset+1, 0, 1)
 	}
 	m.viewport.SetYOffset(offset)
+
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // GotoTop moves the selection to the first row.
-func (m *Model) GotoTop() {
+func (m *Model) GotoTop() tea.Cmd {
 	m.MoveUp(m.cursor)
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // GotoBottom moves the selection to the last row.
-func (m *Model) GotoBottom() {
+func (m *Model) GotoBottom() tea.Cmd {
 	m.MoveDown(len(m.rows))
+	return func() tea.Msg {
+		if m.cursor >= 0 && m.cursor < len(m.rows) {
+			return MoveSelectMsg{Row: &m.rows[m.cursor]}
+		}
+		return nil
+	}
 }
 
 // FromValues create the table rows from a simple string. It uses `\n` by

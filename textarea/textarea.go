@@ -16,6 +16,7 @@ import (
 	"charm.land/bubbles/v2/internal/memoization"
 	"charm.land/bubbles/v2/internal/runeutil"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/statusbar"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -71,6 +72,10 @@ type KeyMap struct {
 	CapitalizeWordForward key.Binding
 
 	TransposeCharacterBackward key.Binding
+
+	// Keys for toggling between VIEW and INSERT modes
+	EnterInsertMode key.Binding
+	EnterViewMode   key.Binding
 }
 
 // DefaultKeyMap returns the default set of key bindings for navigating and acting
@@ -103,6 +108,9 @@ func DefaultKeyMap() KeyMap {
 		UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
 
 		TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
+
+		EnterInsertMode: key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "enter insert mode")),
+		EnterViewMode:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "enter view mode")),
 	}
 }
 
@@ -335,6 +343,12 @@ type Model struct {
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
+
+	// InsertMode controls whether the textarea is in INSERT mode (true) or VIEW mode (false)
+	InsertMode bool
+
+	// Statusbar displays mode and word/character count
+	Statusbar *statusbar.Model
 }
 
 // New creates a new model with default settings.
@@ -364,7 +378,24 @@ func New() Model {
 		row:   0,
 
 		viewport: &vp,
+
+		InsertMode: true, // Start in INSERT mode by default
 	}
+
+	// Initialize statusbar
+	sb := statusbar.New(
+		statusbar.WithHeight(1),
+		statusbar.WithWidth(defaultWidth),
+	)
+	modeElem := sb.AddLeft(8, "INSERT")
+	modeElem.SetColors("0", "34")
+	sb.SetTag(modeElem, "mode")
+
+	countElem := sb.AddLeft(25, "0 chars | 0 words")
+	countElem.SetColors("252", "236")
+	sb.SetTag(countElem, "count")
+
+	m.Statusbar = &sb
 
 	m.SetHeight(defaultHeight)
 	m.SetWidth(defaultWidth)
@@ -474,6 +505,44 @@ func (m *Model) InsertString(s string) {
 // InsertRune inserts a rune at the cursor position.
 func (m *Model) InsertRune(r rune) {
 	m.insertRunesFromUserInput([]rune{r})
+}
+
+// SetInsertMode sets the textarea to INSERT mode
+func (m *Model) SetInsertMode() {
+	m.InsertMode = true
+	if m.Statusbar != nil {
+		if elem := m.Statusbar.GetTag("mode"); elem != nil {
+			elem.SetValue("INSERT").SetColors("0", "34")
+		}
+	}
+}
+
+// SetViewMode sets the textarea to VIEW mode
+func (m *Model) SetViewMode() {
+	m.InsertMode = false
+	if m.Statusbar != nil {
+		if elem := m.Statusbar.GetTag("mode"); elem != nil {
+			elem.SetValue("VIEW").SetColors("0", "39")
+		}
+	}
+}
+
+// updateWordCount updates the character and word count in the statusbar
+func (m *Model) updateWordCount() {
+	if m.Statusbar == nil {
+		return
+	}
+	elem := m.Statusbar.GetTag("count")
+	if elem == nil {
+		return
+	}
+	text := m.Value()
+	chars := len([]rune(text))
+	words := 0
+	if len(strings.TrimSpace(text)) > 0 {
+		words = len(strings.Fields(text))
+	}
+	elem.SetValue(fmt.Sprintf("%d chars | %d words", chars, words))
 }
 
 // insertRunesFromUserInput inserts runes at the current cursor position.
@@ -1134,6 +1203,11 @@ func (m *Model) SetWidth(w int) {
 
 	m.viewport.SetWidth(inputWidth - reservedOuter)
 	m.width = inputWidth - reservedOuter - reservedInner
+
+	// Update statusbar width to match
+	if m.Statusbar != nil {
+		m.Statusbar.SetWidth(inputWidth)
+	}
 }
 
 // SetPromptFunc supersedes the Prompt field and sets a dynamic prompt instead.
@@ -1189,25 +1263,76 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.PasteMsg:
 		m.insertRunesFromUserInput([]rune(msg.Content))
 	case tea.KeyPressMsg:
+		// Handle mode switching first
+		switch {
+		case key.Matches(msg, m.KeyMap.EnterViewMode):
+			m.SetViewMode()
+			m.updateWordCount()
+			return m, nil
+		case key.Matches(msg, m.KeyMap.EnterInsertMode):
+			m.SetInsertMode()
+			m.updateWordCount()
+			return m, nil
+		}
+
+		// Only allow editing in INSERT mode
+		if !m.InsertMode {
+			// VIEW mode - navigation only
+			switch {
+			case key.Matches(msg, m.KeyMap.LineEnd):
+				m.CursorEnd()
+			case key.Matches(msg, m.KeyMap.LineStart):
+				m.CursorStart()
+			case key.Matches(msg, m.KeyMap.CharacterForward):
+				m.characterRight()
+			case key.Matches(msg, m.KeyMap.LineNext):
+				m.setCursorLineRelative(+1)
+			case key.Matches(msg, m.KeyMap.WordForward):
+				m.wordRight()
+			case key.Matches(msg, m.KeyMap.CharacterBackward):
+				m.characterLeft(false)
+			case key.Matches(msg, m.KeyMap.LinePrevious):
+				m.setCursorLineRelative(-1)
+			case key.Matches(msg, m.KeyMap.WordBackward):
+				m.wordLeft()
+			case key.Matches(msg, m.KeyMap.InputBegin):
+				m.MoveToBegin()
+			case key.Matches(msg, m.KeyMap.InputEnd):
+				m.MoveToEnd()
+			case key.Matches(msg, m.KeyMap.PageUp):
+				m.PageUp()
+			case key.Matches(msg, m.KeyMap.PageDown):
+				m.PageDown()
+			}
+			// Skip all editing keys in VIEW mode
+			break
+		}
+
+		// INSERT mode - full editing capabilities
 		switch {
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
+				m.updateWordCount()
 				break
 			}
 			m.deleteAfterCursor()
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
+				m.updateWordCount()
 				break
 			}
 			m.deleteBeforeCursor()
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
+				m.updateWordCount()
 				break
 			}
 			if len(m.value[m.row]) > 0 {
@@ -1216,33 +1341,39 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.SetCursorColumn(m.col - 1)
 				}
 			}
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 			}
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
-				break
 			}
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteWordBackward):
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
+				m.updateWordCount()
 				break
 			}
 			m.deleteWordLeft()
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteWordForward):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
+				m.updateWordCount()
 				break
 			}
 			m.deleteWordRight()
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
 			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
 				return m, nil
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			m.splitLine(m.row, m.col)
+			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.LineEnd):
 			m.CursorEnd()
 		case key.Matches(msg, m.KeyMap.LineStart):
@@ -1280,10 +1411,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 		default:
 			m.insertRunesFromUserInput([]rune(msg.Text))
+			m.updateWordCount()
 		}
 
 	case pasteMsg:
 		m.insertRunesFromUserInput([]rune(msg))
+		m.updateWordCount()
 
 	case pasteErrMsg:
 		m.Err = msg
@@ -1420,7 +1553,13 @@ func (m Model) View() string {
 	m.viewport.SetContent(m.view())
 	view := m.viewport.View()
 	styles := m.activeStyle()
-	return styles.Base.Render(view)
+	textareaView := styles.Base.Render(view)
+
+	// Append statusbar if it exists
+	if m.Statusbar != nil {
+		return textareaView + "\n" + m.Statusbar.Render()
+	}
+	return textareaView
 }
 
 // promptView renders a single line of the prompt.
