@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/viewport"
+	"github.com/haochend413/bubbles/v2/help"
+	"github.com/haochend413/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"

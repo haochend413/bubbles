@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/haochend413/bubbles/v2/textarea"
 )
 
 type model struct {
