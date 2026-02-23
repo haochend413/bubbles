@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/haochend413/bubbles/v2/key"
+	"github.com/haochend413/bubbles/key"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 )

@@ -1,7 +1,7 @@
 package list
 
 import (
-	"github.com/haochend413/bubbles/v2/textinput"
+	"github.com/haochend413/bubbles/textinput"
 	"charm.land/lipgloss/v2"
 )
 

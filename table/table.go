@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/haochend413/bubbles/v2/help"
-	"github.com/haochend413/bubbles/v2/key"
+	"github.com/haochend413/bubbles/help"
+	"github.com/haochend413/bubbles/key"
 	"github.com/haochend413/bubbles/viewport"
 )
 

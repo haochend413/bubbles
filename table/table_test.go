@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/haochend413/bubbles/v2/help"
-	"github.com/haochend413/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/haochend413/bubbles/help"
+	"github.com/haochend413/bubbles/viewport"
 )
 
 var testCols = []Column{

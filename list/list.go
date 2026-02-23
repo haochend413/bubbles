@@ -16,11 +16,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 
-	"github.com/haochend413/bubbles/v2/help"
-	"github.com/haochend413/bubbles/v2/key"
-	"github.com/haochend413/bubbles/v2/paginator"
-	"github.com/haochend413/bubbles/v2/spinner"
-	"github.com/haochend413/bubbles/v2/textinput"
+	"github.com/haochend413/bubbles/help"
+	"github.com/haochend413/bubbles/key"
+	"github.com/haochend413/bubbles/paginator"
+	"github.com/haochend413/bubbles/spinner"
+	"github.com/haochend413/bubbles/textinput"
 )
 
 func clamp[T cmp.Ordered](v, low, high T) T {

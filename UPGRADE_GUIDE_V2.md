@@ -1,12 +1,12 @@
 # Upgrading to Bubbles v2
 
-This guide covers every breaking change when migrating from Bubbles v1 (`github.com/charmbracelet/bubbles`) to Bubbles v2 (`github.com/haochend413/bubbles/v2`). It is written for both humans and LLM-assisted migration tools.
+This guide covers every breaking change when migrating from Bubbles v1 (`github.com/charmbracelet/bubbles`) to Bubbles v2 (`github.com/haochend413/bubbles`). It is written for both humans and LLM-assisted migration tools.
 
 > **Companion upgrades required.** Bubbles v2 requires Bubble Tea v2 and Lip Gloss v2. Upgrade all three together:
 >
 > ```sh
 > go get charm.land/bubbletea/v2@latest
-> go get github.com/haochend413/bubbles/v2@latest
+> go get github.com/haochend413/bubbles@latest
 > go get charm.land/lipgloss/v2@latest
 > ```
 
@@ -37,7 +37,7 @@ This guide covers every breaking change when migrating from Bubbles v1 (`github.
 
 ## 1. Import Paths
 
-Replace all `github.com/charmbracelet/bubbles` imports with `github.com/haochend413/bubbles/v2`:
+Replace all `github.com/charmbracelet/bubbles` imports with `github.com/haochend413/bubbles`:
 
 ```go
 // Before
@@ -60,19 +60,19 @@ import (
 
 // After
 import (
-    "github.com/haochend413/bubbles/v2/cursor"
-    "github.com/haochend413/bubbles/v2/help"
-    "github.com/haochend413/bubbles/v2/key"
-    "github.com/haochend413/bubbles/v2/list"
-    "github.com/haochend413/bubbles/v2/paginator"
-    "github.com/haochend413/bubbles/v2/progress"
-    "github.com/haochend413/bubbles/v2/spinner"
-    "github.com/haochend413/bubbles/v2/stopwatch"
-    "github.com/haochend413/bubbles/v2/table"
-    "github.com/haochend413/bubbles/v2/textarea"
-    "github.com/haochend413/bubbles/v2/textinput"
-    "github.com/haochend413/bubbles/v2/timer"
-    "github.com/haochend413/bubbles/v2/viewport"
+    "github.com/haochend413/bubbles/cursor"
+    "github.com/haochend413/bubbles/help"
+    "github.com/haochend413/bubbles/key"
+    "github.com/haochend413/bubbles/list"
+    "github.com/haochend413/bubbles/paginator"
+    "github.com/haochend413/bubbles/progress"
+    "github.com/haochend413/bubbles/spinner"
+    "github.com/haochend413/bubbles/stopwatch"
+    "github.com/haochend413/bubbles/table"
+    "github.com/haochend413/bubbles/textarea"
+    "github.com/haochend413/bubbles/textinput"
+    "github.com/haochend413/bubbles/timer"
+    "github.com/haochend413/bubbles/viewport"
 )
 ```
 
@@ -81,8 +81,8 @@ import (
 **Search-and-replace pattern:**
 
 ```
-github.com/charmbracelet/bubbles/  →  github.com/haochend413/bubbles/v2/
-github.com/charmbracelet/bubbles   →  github.com/haochend413/bubbles/v2
+github.com/charmbracelet/bubbles/  →  github.com/haochend413/bubbles/
+github.com/charmbracelet/bubbles   →  github.com/haochend413/bubbles
 ```
 
 ---
