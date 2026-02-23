@@ -2,8 +2,8 @@
 package statusbar
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type Partition int
@@ -158,8 +158,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() string {
-	return m.Render()
+func (m Model) View() tea.View {
+	v := tea.NewView(m.Render())
+	return v
 }
 
 // Add an element to the left partition of the bar.

@@ -1,6 +1,6 @@
 package list
 
-import "github.com/haochend413/bubbles/key"
+import "github.com/haochend413/bubbles/v2/key"
 
 // KeyMap defines keybindings. It satisfies to the help.KeyMap interface, which
 // is used to render the menu.
