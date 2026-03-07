@@ -4,7 +4,7 @@ import (
 	"image/color"
 	"testing"
 
-	"charm.land/lipgloss/v2"
+	"github.com/haochend413/lipgloss/v2"
 	"github.com/charmbracelet/x/exp/golden"
 )
 

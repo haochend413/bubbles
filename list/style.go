@@ -2,7 +2,7 @@ package list
 
 import (
 	"github.com/haochend413/bubbles/v2/textinput"
-	"charm.land/lipgloss/v2"
+	"github.com/haochend413/lipgloss/v2"
 )
 
 const (

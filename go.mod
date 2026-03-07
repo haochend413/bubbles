@@ -4,13 +4,13 @@ go 1.24.2
 
 require (
 	charm.land/bubbletea/v2 v2.0.1
-	charm.land/lipgloss/v2 v2.0.0
 	github.com/MakeNowJust/heredoc v1.0.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/harmonica v0.2.0
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/charmbracelet/x/exp/golden v0.0.0-20260305213658-fe36e8c10185
 	github.com/dustin/go-humanize v1.0.1
+	github.com/haochend413/lipgloss/v2 v2.100.0
 	github.com/mattn/go-runewidth v0.0.21
 	github.com/rivo/uniseg v0.4.7
 	github.com/sahilm/fuzzy v0.1.1

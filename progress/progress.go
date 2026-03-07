@@ -10,7 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	"github.com/haochend413/lipgloss/v2"
 	"github.com/charmbracelet/harmonica"
 	"github.com/charmbracelet/x/ansi"
 )

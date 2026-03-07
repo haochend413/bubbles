@@ -19,7 +19,7 @@ import (
 	"github.com/haochend413/bubbles/v2/statusbar"
 	"github.com/haochend413/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	"github.com/haochend413/lipgloss/v2"
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
