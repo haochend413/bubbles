@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/haochend413/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/haochend413/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/haochend413/bubbles/v2/key"
+	"github.com/haochend413/lipgloss/v2"
 )
 
 const (

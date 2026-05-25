@@ -12,16 +12,16 @@ import (
 	"time"
 	"unicode"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/haochend413/bubbles/v2/cursor"
 	"github.com/haochend413/bubbles/v2/internal/memoization"
 	"github.com/haochend413/bubbles/v2/internal/runeutil"
 	"github.com/haochend413/bubbles/v2/key"
 	"github.com/haochend413/bubbles/v2/statusbar"
 	"github.com/haochend413/bubbles/v2/viewport"
-	tea "charm.land/bubbletea/v2"
 	"github.com/haochend413/lipgloss/v2"
-	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
 )
@@ -31,7 +31,7 @@ const (
 	defaultHeight    = 6
 	defaultWidth     = 40
 	defaultCharLimit = 0 // no limit
-	defaultMaxHeight = 99
+	defaultMaxHeight = 10000
 	defaultMaxWidth  = 500
 
 	// XXX: in v2, make max lines dynamic and default max lines configurable.
@@ -207,6 +207,10 @@ type StyleState struct {
 	Prompt           lipgloss.Style
 }
 
+func colorPtr(c string) *string {
+	return &c
+}
+
 func (s StyleState) computedCursorLine() lipgloss.Style {
 	return s.CursorLine.Inherit(s.Base).Inline(true)
 }
@@ -363,7 +367,7 @@ func New() Model {
 		CharLimit:            defaultCharLimit,
 		MaxHeight:            defaultMaxHeight,
 		MaxWidth:             defaultMaxWidth,
-		Prompt:               lipgloss.ThickBorder().Left + " ",
+		Prompt:               " ",
 		styles:               styles,
 		cache:                memoization.NewMemoCache[line, [][]rune](maxLines),
 		EndOfBufferCharacter: ' ',
@@ -388,11 +392,11 @@ func New() Model {
 		statusbar.WithWidth(defaultWidth),
 	)
 	modeElem := sb.AddLeft(8, "INSERT")
-	modeElem.SetColors("0", "34")
+	modeElem.SetColors(colorPtr("0"), colorPtr("34"))
 	sb.SetTag(modeElem, "mode")
 
 	countElem := sb.AddLeft(25, "0 chars | 0 words")
-	countElem.SetColors("252", "236")
+	countElem.SetColors(colorPtr("252"), colorPtr("236"))
 	sb.SetTag(countElem, "count")
 
 	m.Statusbar = &sb
@@ -512,7 +516,7 @@ func (m *Model) SetInsertMode() {
 	m.InsertMode = true
 	if m.Statusbar != nil {
 		if elem := m.Statusbar.GetTag("mode"); elem != nil {
-			elem.SetValue("INSERT").SetColors("0", "34")
+			elem.SetValue("INSERT").SetColors(colorPtr("0"), colorPtr("34"))
 		}
 	}
 }
@@ -522,7 +526,7 @@ func (m *Model) SetViewMode() {
 	m.InsertMode = false
 	if m.Statusbar != nil {
 		if elem := m.Statusbar.GetTag("mode"); elem != nil {
-			elem.SetValue("VIEW").SetColors("0", "39")
+			elem.SetValue("VIEW").SetColors(colorPtr("0"), colorPtr("39"))
 		}
 	}
 }
@@ -1239,6 +1243,10 @@ func (m *Model) SetHeight(h int) {
 	m.repositionView()
 }
 
+func (m Model) UpdateWordCount() {
+	m.updateWordCount()
+}
+
 // Update is the Bubble Tea update loop.
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.focus {
@@ -1264,21 +1272,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.insertRunesFromUserInput([]rune(msg.Content))
 	case tea.KeyPressMsg:
 		// Handle mode switching first
-		switch {
-		case key.Matches(msg, m.KeyMap.EnterViewMode):
-			m.SetViewMode()
-			m.updateWordCount()
-			return m, nil
-		case key.Matches(msg, m.KeyMap.EnterInsertMode):
-			m.SetInsertMode()
-			m.updateWordCount()
-			return m, nil
-		}
 
 		// Only allow editing in INSERT mode
 		if !m.InsertMode {
 			// VIEW mode - navigation only
 			switch {
+			case key.Matches(msg, m.KeyMap.EnterInsertMode):
+				m.SetInsertMode()
+				m.updateWordCount()
+				return m, nil
+
 			case key.Matches(msg, m.KeyMap.LineEnd):
 				m.CursorEnd()
 			case key.Matches(msg, m.KeyMap.LineStart):
@@ -1310,6 +1313,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 		// INSERT mode - full editing capabilities
 		switch {
+		case key.Matches(msg, m.KeyMap.EnterViewMode):
+			m.SetViewMode()
+			m.updateWordCount()
+			return m, nil
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col >= len(m.value[m.row]) {
@@ -1606,8 +1613,8 @@ func (m Model) lineNumberView(n int, isCursorLine bool) (str string) {
 		lineNumberStyle = m.activeStyle().computedCursorLineNumber()
 	}
 
-	// Format line number dynamically based on the maximum number of lines.
-	digits := len(strconv.Itoa(m.MaxHeight))
+	// Format line number dynamically based on the current number of lines.
+	digits := len(strconv.Itoa(max(1, len(m.value))))
 	str = fmt.Sprintf(" %*v ", digits, str)
 
 	return textStyle.Render(lineNumberStyle.Render(str))

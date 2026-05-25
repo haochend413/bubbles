@@ -7,9 +7,9 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/haochend413/lipgloss/v2"
 	"github.com/MakeNowJust/heredoc"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/haochend413/lipgloss/v2"
 )
 
 func TestVerticalScrolling(t *testing.T) {

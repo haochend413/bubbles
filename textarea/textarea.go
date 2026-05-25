@@ -19,7 +19,6 @@ import (
 	"github.com/haochend413/bubbles/v2/internal/memoization"
 	"github.com/haochend413/bubbles/v2/internal/runeutil"
 	"github.com/haochend413/bubbles/v2/key"
-	"github.com/haochend413/bubbles/v2/statusbar"
 	"github.com/haochend413/bubbles/v2/viewport"
 	"github.com/haochend413/lipgloss/v2"
 	rw "github.com/mattn/go-runewidth"
@@ -72,10 +71,6 @@ type KeyMap struct {
 	CapitalizeWordForward key.Binding
 
 	TransposeCharacterBackward key.Binding
-
-	// Keys for toggling between VIEW and INSERT modes
-	EnterInsertMode key.Binding
-	EnterViewMode   key.Binding
 }
 
 // DefaultKeyMap returns the default set of key bindings for navigating and acting
@@ -108,9 +103,6 @@ func DefaultKeyMap() KeyMap {
 		UppercaseWordForward:  key.NewBinding(key.WithKeys("alt+u"), key.WithHelp("alt+u", "uppercase word forward")),
 
 		TransposeCharacterBackward: key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "transpose character backward")),
-
-		EnterInsertMode: key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "enter insert mode")),
-		EnterViewMode:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "enter view mode")),
 	}
 }
 
@@ -295,6 +287,23 @@ type Model struct {
 	// there's no limit.
 	MaxWidth int
 
+	// DynamicHeight, when true, causes the textarea to automatically grow
+	// and shrink its height to fit the content. The height is clamped between
+	// MinHeight and MaxHeight.
+	DynamicHeight bool
+
+	// MinHeight is the minimum height of the text area in rows when
+	// DynamicHeight is enabled. If 0 or less, defaults to 1.
+	MinHeight int
+
+	// MaxContentHeight is the maximum content height in visual rows
+	// (accounting for soft wraps). When set (> 0), input is blocked once
+	// the total visual lines reach this limit, while MaxHeight controls
+	// only the visible viewport height. When 0, the content guard falls
+	// back to the legacy MaxHeight behavior (blocking at MaxHeight
+	// logical lines) for backward compatibility.
+	MaxContentHeight int
+
 	// Styling. Styles are defined in [Styles]. Use [SetStyles] and [GetStyles]
 	// to work with this value publicly.
 	styles Styles
@@ -343,12 +352,6 @@ type Model struct {
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
-
-	// InsertMode controls whether the textarea is in INSERT mode (true) or VIEW mode (false)
-	InsertMode bool
-
-	// Statusbar displays mode and word/character count
-	Statusbar *statusbar.Model
 }
 
 // New creates a new model with default settings.
@@ -378,24 +381,7 @@ func New() Model {
 		row:   0,
 
 		viewport: &vp,
-
-		InsertMode: true, // Start in INSERT mode by default
 	}
-
-	// Initialize statusbar
-	sb := statusbar.New(
-		statusbar.WithHeight(1),
-		statusbar.WithWidth(defaultWidth),
-	)
-	modeElem := sb.AddLeft(8, "INSERT")
-	modeElem.SetColors("0", "34")
-	sb.SetTag(modeElem, "mode")
-
-	countElem := sb.AddLeft(25, "0 chars | 0 words")
-	countElem.SetColors("252", "236")
-	sb.SetTag(countElem, "count")
-
-	m.Statusbar = &sb
 
 	m.SetHeight(defaultHeight)
 	m.SetWidth(defaultWidth)
@@ -495,54 +481,19 @@ func (m *Model) updateVirtualCursorStyle() {
 func (m *Model) SetValue(s string) {
 	m.Reset()
 	m.InsertString(s)
+	m.recalculateHeight()
 }
 
 // InsertString inserts a string at the cursor position.
 func (m *Model) InsertString(s string) {
 	m.insertRunesFromUserInput([]rune(s))
+	m.recalculateHeight()
 }
 
 // InsertRune inserts a rune at the cursor position.
 func (m *Model) InsertRune(r rune) {
 	m.insertRunesFromUserInput([]rune{r})
-}
-
-// SetInsertMode sets the textarea to INSERT mode
-func (m *Model) SetInsertMode() {
-	m.InsertMode = true
-	if m.Statusbar != nil {
-		if elem := m.Statusbar.GetTag("mode"); elem != nil {
-			elem.SetValue("INSERT").SetColors("0", "34")
-		}
-	}
-}
-
-// SetViewMode sets the textarea to VIEW mode
-func (m *Model) SetViewMode() {
-	m.InsertMode = false
-	if m.Statusbar != nil {
-		if elem := m.Statusbar.GetTag("mode"); elem != nil {
-			elem.SetValue("VIEW").SetColors("0", "39")
-		}
-	}
-}
-
-// updateWordCount updates the character and word count in the statusbar
-func (m *Model) updateWordCount() {
-	if m.Statusbar == nil {
-		return
-	}
-	elem := m.Statusbar.GetTag("count")
-	if elem == nil {
-		return
-	}
-	text := m.Value()
-	chars := len([]rune(text))
-	words := 0
-	if len(strings.TrimSpace(text)) > 0 {
-		words = len(strings.Fields(text))
-	}
-	elem.SetValue(fmt.Sprintf("%d chars | %d words", chars, words))
+	m.recalculateHeight()
 }
 
 // insertRunesFromUserInput inserts runes at the current cursor position.
@@ -588,6 +539,18 @@ func (m *Model) insertRunesFromUserInput(runes []rune) {
 	if maxLines > 0 && len(m.value)+len(lines)-1 > maxLines {
 		allowedHeight := max(0, maxLines-len(m.value)+1)
 		lines = lines[:allowedHeight]
+	}
+
+	// Obey MaxContentHeight in visual rows when set.
+	if m.MaxContentHeight > 0 {
+		budget := m.MaxContentHeight - m.totalVisualLines()
+		// Trim lines from the end until we fit within the budget.
+		for len(lines) > 1 && m.visualLinesForInsert(lines) > budget {
+			lines = lines[:len(lines)-1]
+		}
+		if m.visualLinesForInsert(lines) > budget {
+			return
+		}
 	}
 
 	if len(lines) == 0 {
@@ -809,6 +772,7 @@ func (m *Model) Reset() {
 	m.row = 0
 	m.viewport.GotoTop()
 	m.SetCursorColumn(0)
+	m.recalculateHeight()
 }
 
 // Word returns the word at the cursor position.
@@ -1203,11 +1167,7 @@ func (m *Model) SetWidth(w int) {
 
 	m.viewport.SetWidth(inputWidth - reservedOuter)
 	m.width = inputWidth - reservedOuter - reservedInner
-
-	// Update statusbar width to match
-	if m.Statusbar != nil {
-		m.Statusbar.SetWidth(inputWidth)
-	}
+	m.recalculateHeight()
 }
 
 // SetPromptFunc supersedes the Prompt field and sets a dynamic prompt instead.
@@ -1263,76 +1223,25 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.PasteMsg:
 		m.insertRunesFromUserInput([]rune(msg.Content))
 	case tea.KeyPressMsg:
-		// Handle mode switching first
-		switch {
-		case key.Matches(msg, m.KeyMap.EnterViewMode):
-			m.SetViewMode()
-			m.updateWordCount()
-			return m, nil
-		case key.Matches(msg, m.KeyMap.EnterInsertMode):
-			m.SetInsertMode()
-			m.updateWordCount()
-			return m, nil
-		}
-
-		// Only allow editing in INSERT mode
-		if !m.InsertMode {
-			// VIEW mode - navigation only
-			switch {
-			case key.Matches(msg, m.KeyMap.LineEnd):
-				m.CursorEnd()
-			case key.Matches(msg, m.KeyMap.LineStart):
-				m.CursorStart()
-			case key.Matches(msg, m.KeyMap.CharacterForward):
-				m.characterRight()
-			case key.Matches(msg, m.KeyMap.LineNext):
-				m.setCursorLineRelative(+1)
-			case key.Matches(msg, m.KeyMap.WordForward):
-				m.wordRight()
-			case key.Matches(msg, m.KeyMap.CharacterBackward):
-				m.characterLeft(false)
-			case key.Matches(msg, m.KeyMap.LinePrevious):
-				m.setCursorLineRelative(-1)
-			case key.Matches(msg, m.KeyMap.WordBackward):
-				m.wordLeft()
-			case key.Matches(msg, m.KeyMap.InputBegin):
-				m.MoveToBegin()
-			case key.Matches(msg, m.KeyMap.InputEnd):
-				m.MoveToEnd()
-			case key.Matches(msg, m.KeyMap.PageUp):
-				m.PageUp()
-			case key.Matches(msg, m.KeyMap.PageDown):
-				m.PageDown()
-			}
-			// Skip all editing keys in VIEW mode
-			break
-		}
-
-		// INSERT mode - full editing capabilities
 		switch {
 		case key.Matches(msg, m.KeyMap.DeleteAfterCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
-				m.updateWordCount()
 				break
 			}
 			m.deleteAfterCursor()
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteBeforeCursor):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
-				m.updateWordCount()
 				break
 			}
 			m.deleteBeforeCursor()
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteCharacterBackward):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
-				m.updateWordCount()
 				break
 			}
 			if len(m.value[m.row]) > 0 {
@@ -1341,39 +1250,33 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.SetCursorColumn(m.col - 1)
 				}
 			}
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteCharacterForward):
 			if len(m.value[m.row]) > 0 && m.col < len(m.value[m.row]) {
 				m.value[m.row] = slices.Delete(m.value[m.row], m.col, m.col+1)
 			}
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
+				break
 			}
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteWordBackward):
 			if m.col <= 0 {
 				m.mergeLineAbove(m.row)
-				m.updateWordCount()
 				break
 			}
 			m.deleteWordLeft()
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.DeleteWordForward):
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			if m.col >= len(m.value[m.row]) {
 				m.mergeLineBelow(m.row)
-				m.updateWordCount()
 				break
 			}
 			m.deleteWordRight()
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.InsertNewline):
-			if m.MaxHeight > 0 && len(m.value) >= m.MaxHeight {
+			if m.atContentLimit() {
 				return m, nil
 			}
 			m.col = clamp(m.col, 0, len(m.value[m.row]))
 			m.splitLine(m.row, m.col)
-			m.updateWordCount()
 		case key.Matches(msg, m.KeyMap.LineEnd):
 			m.CursorEnd()
 		case key.Matches(msg, m.KeyMap.LineStart):
@@ -1411,16 +1314,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 		default:
 			m.insertRunesFromUserInput([]rune(msg.Text))
-			m.updateWordCount()
 		}
 
 	case pasteMsg:
 		m.insertRunesFromUserInput([]rune(msg))
-		m.updateWordCount()
 
 	case pasteErrMsg:
 		m.Err = msg
 	}
+
+	m.recalculateHeight()
 
 	// Make sure we set the content of the viewport before updating it.
 	view := m.view()
@@ -1553,13 +1456,7 @@ func (m Model) View() string {
 	m.viewport.SetContent(m.view())
 	view := m.viewport.View()
 	styles := m.activeStyle()
-	textareaView := styles.Base.Render(view)
-
-	// Append statusbar if it exists
-	if m.Statusbar != nil {
-		return textareaView + "\n" + m.Statusbar.Render()
-	}
-	return textareaView
+	return styles.Base.Render(view)
 }
 
 // promptView renders a single line of the prompt.
@@ -1764,6 +1661,76 @@ func (m Model) cursorLineNumber() int {
 	}
 	line += m.LineInfo().RowOffset
 	return line
+}
+
+// totalVisualLines returns the total number of display lines across all
+// logical lines, accounting for soft wraps.
+func (m *Model) totalVisualLines() int {
+	n := 0
+	for _, line := range m.value {
+		n += len(m.memoizedWrap(line, m.width))
+	}
+	return n
+}
+
+// recalculateHeight recomputes and applies the textarea height based on
+// content when DynamicHeight is enabled. It is a no-op otherwise.
+func (m *Model) recalculateHeight() {
+	if !m.DynamicHeight {
+		return
+	}
+	minH := max(m.MinHeight, minHeight)
+	total := m.totalVisualLines()
+	h := max(total, minH)
+	if m.MaxHeight > 0 {
+		h = min(h, m.MaxHeight)
+	}
+	if maxOffset := total - h; m.viewport.YOffset() > maxOffset {
+		m.viewport.SetYOffset(max(0, maxOffset))
+	}
+	m.SetHeight(h)
+}
+
+// atContentLimit reports whether the textarea has reached its content limit.
+// When MaxContentHeight is set (> 0), it checks total visual lines.
+// Otherwise it falls back to the legacy MaxHeight logical-line check for
+// backward compatibility.
+func (m *Model) atContentLimit() bool {
+	if m.MaxContentHeight > 0 {
+		return m.totalVisualLines() >= m.MaxContentHeight
+	}
+	return m.MaxHeight > 0 && len(m.value) >= m.MaxHeight
+}
+
+// visualLinesForInsert estimates how many additional visual lines would result
+// from inserting the given lines at the current cursor position. The first
+// element merges into the current line; subsequent elements become new lines.
+func (m *Model) visualLinesForInsert(lines [][]rune) int {
+	if len(lines) == 0 {
+		return 0
+	}
+
+	// The current row's visual line count before insertion.
+	currentRowVisual := len(m.memoizedWrap(m.value[m.row], m.width))
+
+	// Simulate merging the first paste line into the current row.
+	merged := make([]rune, m.col+len(lines[0]))
+	copy(merged, m.value[m.row][:m.col])
+	copy(merged[m.col:], lines[0])
+	if len(lines) == 1 {
+		merged = append(merged, m.value[m.row][m.col:]...)
+	}
+	delta := len(m.memoizedWrap(merged, m.width)) - currentRowVisual
+
+	// Each additional line is a new logical line.
+	for i, content := range lines {
+		if i == len(lines)-1 {
+			content = append(content, m.value[m.row][m.col:]...)
+		}
+		delta += len(m.memoizedWrap(content, m.width))
+	}
+
+	return delta
 }
 
 // mergeLineBelow merges the current line the cursor is on with the line below.

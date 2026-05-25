@@ -1,82 +1,113 @@
 package main
 
-import (
-	"fmt"
-	"os"
+// A simple program demonstrating the textarea component from the Bubbles
+// component library.
 
+import (
+	"log"
+	"strings"
+
+	// "/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
-	"github.com/haochend413/lipgloss/v2"
 	"github.com/haochend413/bubbles/v2/textarea"
+	"github.com/haochend413/lipgloss/v2"
+	// "charm.land/lipgloss/v2"
 )
+
+func main() {
+	p := tea.NewProgram(initialModel())
+
+	if _, err := p.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+type errMsg error
 
 type model struct {
 	textarea textarea.Model
+	err      error
 }
 
-func NewModel() model {
-	ta := textarea.New()
-	ta.Placeholder = "Start typing... (Press 'i' for INSERT mode, 'esc' for VIEW mode)"
-	ta.SetWidth(80)
-	ta.SetHeight(15)
-	ta.Focus()
-	ta.SetValue("Welcome to the Textarea Demo!\n\nNew features:\n- Press 'i' to enter INSERT mode (editing enabled)\n- Press 'esc' to enter VIEW mode (navigation only)\n- Mode and word count shown in status bar\n\nTry it out!")
+func initialModel() model {
+	ti := textarea.New()
+	ti.Placeholder = "Once upon a time..."
+	ti.SetVirtualCursor(false)
+	ti.SetStyles(textarea.DefaultStyles(true)) // default to dark styles.
+	ti.Focus()
 
 	return model{
-		textarea: ta,
+		textarea: ti,
+		err:      nil,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, tea.RequestBackgroundColor)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.textarea.SetWidth(msg.Width)
+	case tea.BackgroundColorMsg:
+		// Update styling now that we know the background color.
+		m.textarea.SetStyles(textarea.DefaultStyles(msg.IsDark()))
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
+		case "esc":
+			if m.textarea.Focused() {
+				m.textarea.Blur()
+			}
+		case "ctrl+c":
 			return m, tea.Quit
+		default:
+			if !m.textarea.Focused() {
+				cmd = m.textarea.Focus()
+				cmds = append(cmds, cmd)
+			}
 		}
+
+		// We handle errors just like any other message
+	case errMsg:
+		m.err = msg
+		return m, nil
 	}
 
 	m.textarea, cmd = m.textarea.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
+}
+
+func (m model) headerView() string {
+	return "Tell me a story.\n"
 }
 
 func (m model) View() tea.View {
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	infoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-
-	header := headerStyle.Render("Textarea Demo - VIM-like Mode Switching") + "\n"
-
-	help := infoStyle.Render(
-		"Mode: Press 'i' (INSERT) | 'esc' (VIEW) | ctrl+c/ctrl+q (quit)\n" +
-			"INSERT: Full editing | VIEW: Navigation only\n",
+	const (
+		footer = "\n(ctrl+c to quit)\n"
 	)
 
-	stats := infoStyle.Render(
-		fmt.Sprintf(
-			"Lines: %d | Cursor: Line %d, Col %d\n",
-			m.textarea.LineCount(),
-			m.textarea.Line()+1,
-			m.textarea.Column(),
-		),
-	)
+	var c *tea.Cursor
+	if !m.textarea.VirtualCursor() {
+		c = m.textarea.Cursor()
 
-	return tea.NewView(
-		header + help + stats + "\n" + m.textarea.View(),
-	)
-}
-
-func main() {
-	p := tea.NewProgram(NewModel())
-	if _, err := p.Run(); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+		// Set the y offset of the cursor based on the position of the textarea
+		// in the application.
+		offset := lipgloss.Height(m.headerView())
+		c.Y += offset
 	}
+
+	f := strings.Join([]string{
+		m.headerView(),
+		m.textarea.View(),
+		footer,
+	}, "\n")
+
+	v := tea.NewView(f)
+	v.Cursor = c
+	v.AltScreen = true
+	return v
 }

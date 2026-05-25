@@ -20,8 +20,12 @@ type Elem struct {
 	tag     string //come with create, no edit;
 	Content string
 	Width   int
-	BgColor string
-	FgColor string
+	BgColor *string
+	FgColor *string
+}
+
+func colorPtr(c string) *string {
+	return &c
 }
 
 func (e *Elem) SetValue(content string) *Elem {
@@ -29,7 +33,7 @@ func (e *Elem) SetValue(content string) *Elem {
 	return e
 }
 
-func (e *Elem) SetColors(fg, bg string) *Elem {
+func (e *Elem) SetColors(fg, bg *string) *Elem {
 	e.FgColor = fg
 	e.BgColor = bg
 	return e
@@ -44,13 +48,18 @@ func (e *Elem) SetWidth(width int) *Elem {
 //		e.Partition = p
 //	}
 func (e Elem) Render(h int) string {
-
 	style := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(e.FgColor)).
-		Background(lipgloss.Color(e.BgColor)).
 		Width(e.Width).
 		Height(h).
 		Align(lipgloss.Center)
+
+	if e.FgColor != nil {
+		style = style.Foreground(lipgloss.Color(*e.FgColor))
+	}
+
+	if e.BgColor != nil {
+		style = style.Background(lipgloss.Color(*e.BgColor))
+	}
 
 	return style.Render(e.Content)
 }
@@ -103,8 +112,8 @@ func WithLeftLen(n int) BarOptions {
 				tag:     "",
 				Content: "",
 				Width:   10, // Default width
-				BgColor: "236",
-				FgColor: "252",
+				BgColor: colorPtr("236"),
+				FgColor: colorPtr("252"),
 			}
 		}
 	}
@@ -118,8 +127,8 @@ func WithRightLen(n int) BarOptions {
 				tag:     "",
 				Content: "",
 				Width:   10, // Default width
-				BgColor: "236",
-				FgColor: "252",
+				BgColor: colorPtr("236"),
+				FgColor: colorPtr("252"),
 			}
 		}
 	}
@@ -168,8 +177,8 @@ func (m *Model) AddLeft(w int, c string) *Elem {
 	newElem := &Elem{
 		Content: c,
 		Width:   w,
-		BgColor: "236",
-		FgColor: "252",
+		BgColor: colorPtr("236"),
+		FgColor: colorPtr("252"),
 	}
 	m.LeftElems = append(m.LeftElems, newElem)
 	return newElem
@@ -202,8 +211,8 @@ func (m *Model) AddRight(w int, c string) *Elem {
 	newElem := &Elem{
 		Content: c,
 		Width:   w,
-		BgColor: "236",
-		FgColor: "252",
+		BgColor: colorPtr("236"),
+		FgColor: colorPtr("252"),
 	}
 	m.RightElems = append(m.RightElems, newElem)
 	return newElem

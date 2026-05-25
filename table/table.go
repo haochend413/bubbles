@@ -4,12 +4,12 @@ package table
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/haochend413/bubbles/v2/help"
 	"github.com/haochend413/bubbles/v2/key"
 	"github.com/haochend413/bubbles/v2/viewport"
-	tea "charm.land/bubbletea/v2"
 	"github.com/haochend413/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // Model defines a state for the table widget.
